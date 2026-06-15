@@ -30,7 +30,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Assemble the site from the selected files
+      - name: Assemble the site (publish files + build the index page)
         run: |
           set -euo pipefail
 
@@ -38,10 +38,14 @@ jobs:
           FILES=(
             "json/json-browser.html"      # the json viewer app
           )
-          # The first file is also copied to index.html, so the site root
-          #   https://<user>.github.io/<repo>/
-          # loads it directly. Set INDEX_FROM="" to skip that aliasing.
-          INDEX_FROM="${FILES[0]}"
+
+          # ===== Landing page: one entry per utility, "link|Title|Description". ====
+          # `link` is relative to the site root — normally a published file's basename.
+          UTILS=(
+            "json-browser.html|JSON DB Viewer|Browse, filter, facet, and share views of any JSON dataset — all in the browser."
+          )
+          SITE_TITLE="Data Table Browsers"
+          SITE_LEAD="Self-contained, dependency-free tools for browsing data tables. Pick one:"
           # ========================================================================
 
           rm -rf _site && mkdir -p _site
@@ -52,12 +56,52 @@ jobs:
             fi
             cp "$f" "_site/$(basename "$f")"
           done
-          if [[ -n "$INDEX_FROM" ]]; then
-            cp "$INDEX_FROM" _site/index.html
-          fi
+
+          # generate a simple index.html that lists the utilities with links
+          cat > _site/index.html <<HTML
+          <!doctype html>
+          <html lang="en">
+          <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <title>${SITE_TITLE}</title>
+          <style>
+          body{font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:#1d2330;background:#f4f5f7;margin:0;padding:48px 20px}
+          main{max-width:680px;margin:0 auto}
+          h1{font-size:24px;margin:0 0 6px}
+          p.lead{color:#6b7280;margin:0 0 26px}
+          ul{list-style:none;padding:0;margin:0}
+          li{background:#fff;border:1px solid #e3e6ea;border-radius:10px;padding:14px 16px;margin-bottom:12px}
+          li a{font-size:17px;font-weight:600;color:#2563eb;text-decoration:none}
+          li a:hover{text-decoration:underline}
+          li .d{display:block;color:#6b7280;font-size:14px;margin-top:3px}
+          footer{max-width:680px;margin:26px auto 0;color:#9aa0aa;font-size:13px}
+          </style>
+          </head>
+          <body>
+          <main>
+          <h1>${SITE_TITLE}</h1>
+          <p class="lead">${SITE_LEAD}</p>
+          <ul>
+          HTML
+
+          for u in "${UTILS[@]}"; do
+            IFS='|' read -r link title desc <<<"$u"
+            printf '<li><a href="%s">%s</a><span class="d">%s</span></li>\n' "$link" "$title" "$desc" >> _site/index.html
+          done
+
+          cat >> _site/index.html <<'HTML'
+          </ul>
+          </main>
+          <footer>Built from the <code>main</code> branch · MIT licensed</footer>
+          </body>
+          </html>
+          HTML
 
           echo "Site contents:"
           ls -la _site
+          echo "--- index.html ---"
+          cat _site/index.html
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
