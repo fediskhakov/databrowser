@@ -64,15 +64,19 @@ and drag-and-drop do. This is the quickest way to glance at a local file.
 
 ## Loading data
 
-Three ways, any of which works with any JSON file:
+Four ways, any of which works with any JSON file:
 
 1. **URL parameter** — `?file=<path-or-URL>`. The path is resolved relative to the
    page (e.g. `?file=top5-approach/authors.json`) or can be an absolute URL the
    server/CORS allows. This is the only method that participates in shareable
    links (below).
-2. **Load JSON…** button — bottom of the left sidebar (under *Display*). Opens a
+2. **Load from URL** — the field in the left sidebar (under *Display*). Paste a
+   URL (or relative path) and press **Load** or Enter; the app fetches it,
+   displays it, and writes it into `?file=` so the view becomes a shareable link.
+   The remote server must permit cross-origin (CORS) requests.
+3. **Load JSON…** button — bottom of the left sidebar (under *Display*). Opens a
    native file picker.
-3. **Drag and drop** — drop a `.json` file anywhere on the window.
+4. **Drag and drop** — drop a `.json` file anywhere on the window.
 
 With no `?file=` parameter the app starts on a **blank page** showing a
 "No JSON loaded" prompt. There is no default dataset.

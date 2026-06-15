@@ -31,7 +31,7 @@
   .ctl{display:flex;gap:6px;align-items:center}
   .ctl.grow{flex:1 1 auto;min-width:200px}
   .ctl.grow input[type=search]{width:100%}
-  input[type=search],input.fsearch{border:1px solid var(--line);border-radius:7px;padding:6px 9px;background:#fff;min-width:160px}
+  input[type=search],input[type=url],input.fsearch{border:1px solid var(--line);border-radius:7px;padding:6px 9px;background:#fff;min-width:160px}
   select,button{border:1px solid var(--line);border-radius:7px;padding:6px 9px;background:#fff;cursor:pointer}
   button:hover,select:hover{border-color:#c7ccd3}
   button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
@@ -92,6 +92,12 @@
         display:none;align-items:center;justify-content:center;font-size:20px;color:var(--accent);z-index:20}
   .empty{padding:40px;text-align:center;color:var(--muted)}
   .empty button{margin-top:10px}
+  .empty .loaders{display:flex;flex-direction:column;gap:8px;max-width:320px;margin:14px auto 0;text-align:left}
+  .empty .loaders button{margin-top:0}
+  #emptyUrlLoad{background:#0d9488;border-color:#0d9488}        /* teal: load by URL */
+  #emptyUrlLoad:hover{background:#0f766e;border-color:#0f766e}
+  #emptyLoad{background:var(--accent);border-color:var(--accent)}  /* blue: load file */
+  #emptyLoad:hover{background:#1d4ed8;border-color:#1d4ed8}
 </style>
 </head>
 <body>
@@ -134,6 +140,8 @@
       <label>View
         <select id="viewMode"><option value="cards">cards</option><option value="full">full-width records</option></select>
       </label>
+      <input type="url" id="urlInput" placeholder="https://…/data.json" autocomplete="off">
+      <button id="urlLoadBtn">Load from URL</button>
       <button id="loadBtn">Load JSON…</button>
       <input type="file" id="fileInput" accept=".json,application/json" hidden>
     </div>
@@ -147,7 +155,11 @@
     <div id="cards" class="grid"></div>
     <div id="emptyState" class="empty" style="display:none">
       <div>No JSON loaded.</div>
-      <button class="primary" id="emptyLoad">Load a JSON file</button>
+      <div class="loaders">
+        <input type="url" id="emptyUrlInput" placeholder="https://…/data.json" autocomplete="off">
+        <button class="primary" id="emptyUrlLoad">Load JSON from URL</button>
+        <button class="primary" id="emptyLoad">Load JSON file</button>
+      </div>
       <div class="muted" style="margin-top:8px">…or drag &amp; drop a .json file anywhere.</div>
     </div>
   </main>
@@ -541,6 +553,17 @@ $("#collapseAll").onclick=()=>document.querySelectorAll(".ffield[open]").forEach
 
 function pickFile(){ $("#fileInput").click(); }
 $("#loadBtn").onclick=pickFile; $("#emptyLoad").onclick=pickFile;
+function loadFromURL(url){
+  url=(url||"").trim(); if(!url) return;
+  fetch(url,{cache:"no-store"})
+    .then(res=>{ if(!res.ok) throw new Error("HTTP "+res.status+" "+res.statusText); return res.json(); })
+    .then(data=>{ loadData(data,url); $("#urlInput").value=url; })
+    .catch(err=>alert("Could not load JSON from URL:\n"+err.message+"\n\nThe server must permit cross-origin (CORS) requests."));
+}
+$("#urlLoadBtn").onclick=()=>loadFromURL($("#urlInput").value);
+$("#urlInput").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); loadFromURL(e.target.value); } });
+$("#emptyUrlLoad").onclick=()=>loadFromURL($("#emptyUrlInput").value);
+$("#emptyUrlInput").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); loadFromURL(e.target.value); } });
 $("#fileInput").addEventListener("change",e=>{ const f=e.target.files[0]; if(!f) return;
   const rd=new FileReader(); rd.onload=()=>{ try{ loadData(JSON.parse(rd.result),f.name);}catch(err){alert("Invalid JSON: "+err.message);} }; rd.readAsText(f); });
 const drop=$("#drop");
@@ -558,6 +581,7 @@ window.addEventListener("drop",e=>{ e.preventDefault(); const f=e.dataTransfer.f
       const res=await fetch(file,{cache:"no-store"});
       if(res.ok){
         loadData(await res.json(),file);   // builds default view (URL writes suppressed)
+        if(/^https?:\/\//i.test(file)) $("#urlInput").value=file;  // reflect URL source
         restoreFromParams(params);          // rehydrate filters/search/display from the URL
         state.restoring=false;
         apply();                            // filter, render, and write the canonical URL
