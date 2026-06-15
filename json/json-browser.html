@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCIgcm9sZT0iaW1nIiBhcmlhLWxhYmVsPSJKU09OIj4KICA8cmVjdCB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHJ4PSIxMiIgZmlsbD0iIzI1NjNlYiIvPgogIDxnIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2ZmZmZmZiIgc3Ryb2tlLXdpZHRoPSI0LjUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+CiAgICA8IS0tIGxlZnQgYnJhY2UgeyAtLT4KICAgIDxwYXRoIGQ9Ik0yNSAxNWMtNSAwLTcgMi03IDd2NWMwIDMtMiA1LTUgNSAzIDAgNSAyIDUgNXY1YzAgNSAyIDcgNyA3Ii8+CiAgICA8IS0tIHJpZ2h0IGJyYWNlIH0gLS0+CiAgICA8cGF0aCBkPSJNMzkgMTVjNSAwIDcgMiA3IDd2NWMwIDMgMiA1IDUgNS0zIDAtNSAyLTUgNXY1YzAgNS0yIDctNyA3Ii8+CiAgPC9nPgogIDwhLS0ga2V5L3ZhbHVlIGRvdHMgLS0+CiAgPGcgZmlsbD0iI2ZmZmZmZiI+CiAgICA8Y2lyY2xlIGN4PSIzMiIgY3k9IjI0IiByPSIyLjYiLz4KICAgIDxjaXJjbGUgY3g9IjMyIiBjeT0iMzIiIHI9IjIuNiIvPgogICAgPGNpcmNsZSBjeD0iMzIiIGN5PSI0MCIgcj0iMi42Ii8+CiAgPC9nPgo8L3N2Zz4K">
+<title>JSON DB Viewer</title>
+<style>
+  :root{
+    --bg:#f4f5f7; --panel:#fff; --ink:#1d2330; --muted:#6b7280; --line:#e3e6ea;
+    --accent:#2563eb; --accent-soft:#e8f0fe; --chip:#eef1f5; --ok:#15803d; --no:#b91c1c;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+       color:var(--ink);background:var(--bg)}
+  a{color:var(--accent);text-decoration:none;word-break:break-all}
+  a:hover{text-decoration:underline}
+  .muted{color:var(--muted)}
+  .app{display:grid;grid-template-columns:310px 1fr;grid-template-rows:auto 1fr;
+       grid-template-areas:"top top" "side main";height:100vh}
+  header.top{grid-area:top;background:var(--panel);border-bottom:1px solid var(--line);
+       padding:10px 16px;display:flex;gap:14px;align-items:center;flex-wrap:wrap;z-index:5}
+  header.top h1{font-size:15px;margin:0;font-weight:700;letter-spacing:.2px}
+  header.top .count{font-weight:600}
+  aside.side{grid-area:side;background:var(--panel);border-right:1px solid var(--line);
+       overflow:auto;padding:10px;display:flex;flex-direction:column}
+  main.main{grid-area:main;overflow:auto;padding:14px}
+  input,select,button{font:inherit;color:inherit}
+  .ctl{display:flex;gap:6px;align-items:center}
+  .ctl.grow{flex:1 1 auto;min-width:200px}
+  .ctl.grow input[type=search]{width:100%}
+  input[type=search],input.fsearch{border:1px solid var(--line);border-radius:7px;padding:6px 9px;background:#fff;min-width:160px}
+  select,button{border:1px solid var(--line);border-radius:7px;padding:6px 9px;background:#fff;cursor:pointer}
+  button:hover,select:hover{border-color:#c7ccd3}
+  button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .pager{display:flex;gap:4px;align-items:center}
+  .pager button{padding:5px 9px}
+  .pager .pg{padding:0 6px;color:var(--muted)}
+  details.meta{margin-bottom:10px;background:var(--panel);border:1px solid var(--line);border-radius:10px}
+  details.meta>summary{cursor:pointer;padding:9px 12px;font-weight:600}
+  .metabody{padding:4px 12px 12px;display:grid;grid-template-columns:1fr;gap:2px}
+  .side h2{font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:10px 4px 6px}
+  .ffield{border:1px solid var(--line);border-radius:8px;margin-bottom:7px;overflow:hidden;background:#fff}
+  .ffield>summary{cursor:pointer;padding:7px 9px;font-weight:600;display:flex;justify-content:space-between;gap:6px;align-items:center}
+  .ffield>summary .n{color:var(--muted);font-weight:500;font-size:12px}
+  .ffield[data-active="1"]>summary{background:var(--accent-soft)}
+  .fbody{padding:6px 9px;border-top:1px solid var(--line)}
+  .fbody .row1{display:flex;gap:6px;margin-bottom:6px}
+  .miss-row{display:flex;gap:12px;padding:2px 2px 6px;border-bottom:1px dashed var(--line);margin-bottom:5px}
+  .miss-row label{display:flex;gap:5px;align-items:center;cursor:pointer;font-size:12px}
+  .miss-row .vc{color:var(--muted)}
+  .fbody .vals{max-height:230px;overflow:auto;display:flex;flex-direction:column;gap:1px}
+  .vrow{display:flex;gap:6px;align-items:center;padding:1px 2px;border-radius:4px}
+  .vrow:hover{background:var(--chip)}
+  .vrow label{flex:1;display:flex;gap:6px;align-items:center;cursor:pointer;min-width:0}
+  .vrow .vtxt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .vrow .vc{color:var(--muted);font-size:12px;flex:none}
+  .mini{font-size:12px;padding:2px 6px}
+  .side .actions{display:flex;gap:6px;margin:4px 4px 6px}
+  /* options block */
+  .opts{display:flex;flex-direction:column;gap:8px;border:1px solid var(--line);border-radius:8px;padding:9px;background:#fff}
+  .opts label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted)}
+  .opts select{width:100%}
+  .spacer{flex:1}
+  /* cards */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:12px}
+  .grid.full{grid-template-columns:1fr}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:12px 13px;
+        box-shadow:0 1px 2px rgba(16,24,40,.04)}
+  .card h3{margin:0 0 8px;font-size:15px;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+  .card h3 .sub{font-weight:500;color:var(--muted);font-size:12px}
+  .kv{display:grid;grid-template-columns:140px 1fr;gap:8px;padding:2px 0;border-top:1px solid #f1f3f5}
+  .kv:first-of-type{border-top:none}
+  .kv .k{color:var(--muted);font-size:12px;word-break:break-word}
+  .kv .v{min-width:0;word-break:break-word}
+  /* full-width view: inline-wrapped fields to use horizontal space */
+  .grid.full .card .kvwrap{display:flex;flex-wrap:wrap;gap:6px 18px}
+  .grid.full .card .kv{grid-template-columns:none;display:flex;gap:6px;border-top:none;padding:1px 0;align-items:baseline}
+  .grid.full .card .kv .k::after{content:":"}
+  .chip{display:inline-block;background:var(--chip);border-radius:999px;padding:1px 8px;margin:1px 2px 1px 0;font-size:12px}
+  .bool{font-weight:600}.b-true{color:var(--ok)}.b-false{color:var(--no)}
+  details.cf{margin:3px 0;border-top:1px solid #f1f3f5;padding-top:3px}
+  details.cf>summary{cursor:pointer;color:var(--accent);font-size:12px}
+  .cf-body{padding:6px 0 2px}
+  .pub{padding:3px 0;border-bottom:1px dashed #eceef1;font-size:13px}
+  .pub:last-child{border-bottom:none}
+  .pub .j{color:var(--muted);font-size:12px}
+  .obj{display:grid;gap:1px}
+  #drop{position:fixed;inset:0;background:rgba(37,99,235,.08);border:3px dashed var(--accent);
+        display:none;align-items:center;justify-content:center;font-size:20px;color:var(--accent);z-index:20}
+  .empty{padding:40px;text-align:center;color:var(--muted)}
+  .empty button{margin-top:10px}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <h1>JSON DB Viewer</h1>
+    <span id="fileName" class="muted"></span>
+    <span class="ctl grow"><input type="search" id="globalSearch" placeholder="Search all fields…"></span>
+    <span class="count"><span id="resCount">0</span> records</span>
+    <span class="pager">
+      <button id="first">«</button><button id="prev">‹</button>
+      <span class="pg" id="pgInfo">–</span>
+      <button id="next">›</button><button id="last">»</button>
+    </span>
+  </header>
+
+  <aside class="side">
+    <div class="actions">
+      <button class="mini" id="resetFilters">Reset filters</button>
+      <button class="mini" id="collapseAll">Collapse all</button>
+    </div>
+    <h2>Filters <span class="muted" id="filterHint"></span></h2>
+    <div id="filters"></div>
+
+    <div class="spacer"></div>
+    <h2>Display</h2>
+    <div class="opts">
+      <label>Records per page
+        <select id="pageSize"><option>100</option><option>500</option><option>1000</option><option value="all">all</option></select>
+      </label>
+      <label>Main record array
+        <select id="recordArray"></select>
+      </label>
+      <label>Card title field
+        <select id="titleField"></select>
+      </label>
+      <label>Card subtitle field
+        <select id="subField"></select>
+      </label>
+      <label>View
+        <select id="viewMode"><option value="cards">cards</option><option value="full">full-width records</option></select>
+      </label>
+      <button id="loadBtn">Load JSON…</button>
+      <input type="file" id="fileInput" accept=".json,application/json" hidden>
+    </div>
+  </aside>
+
+  <main class="main">
+    <details class="meta" id="metaBox">
+      <summary>Metadata &amp; dataset info</summary>
+      <div class="metabody" id="metaBody"></div>
+    </details>
+    <div id="cards" class="grid"></div>
+    <div id="emptyState" class="empty" style="display:none">
+      <div>No JSON loaded.</div>
+      <button class="primary" id="emptyLoad">Load a JSON file</button>
+      <div class="muted" style="margin-top:8px">…or drag &amp; drop a .json file anywhere.</div>
+    </div>
+  </main>
+</div>
+<div id="drop">Drop JSON file to load</div>
+
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const NULLKEY = "(null)";
+const isMissing = v => v===null || v===undefined || v==="";
+const valKey = v => (v===null||v===undefined) ? NULLKEY : String(v);
+
+const state = {
+  raw:null, recordKey:null, records:[], meta:{}, fileName:"",
+  fields:[], scalarFields:[], complexFields:[],
+  values:{}, missCount:{}, presCount:{},
+  facetVal:{}, facetMiss:{}, facetPres:{},   // live, recomputed each apply()
+  filters:{},            // field -> {vals:Set, missing:bool, present:bool}
+  search:"", pageSize:100, page:0,
+  titleSel:null, subSel:null, viewMode:"cards",
+  filtered:[], pageItems:[], restoring:false
+};
+
+/* ---------- record-array discovery ---------- */
+function arrayCandidates(raw){
+  const out=[];
+  if(Array.isArray(raw)) out.push({key:"__root__", label:"(root array)", n:raw.length});
+  else if(raw && typeof raw==="object")
+    for(const k in raw) if(Array.isArray(raw[k])) out.push({key:k, label:k, n:raw[k].length});
+  return out;
+}
+function recordsFor(raw,key){
+  let v = key==="__root__" ? raw : (raw && typeof raw==="object" ? raw[key] : undefined);
+  if(Array.isArray(v)) return v;              // normal case: an array of records
+  if(v && typeof v==="object") return [v];    // lone object -> treat as a single record
+  return [];                                   // scalar / nothing -> no records
+}
+function metaFor(raw,key){
+  if(key==="__root__" || !raw || typeof raw!=="object") return {};
+  const o={}; for(const x in raw) if(x!==key) o[x]=raw[x]; return o;
+}
+
+/* ---------- analysis ---------- */
+function analyze(){
+  const fieldSet=[], seen=new Set(), nonScalar=new Set();
+  for(const r of state.records){
+    if(!r||typeof r!=="object") continue;
+    for(const k in r){
+      if(!seen.has(k)){ seen.add(k); fieldSet.push(k); }
+      const v=r[k]; if(v!==null && v!==undefined && typeof v==="object") nonScalar.add(k);
+    }
+  }
+  state.fields=fieldSet;
+  state.scalarFields=fieldSet.filter(k=>!nonScalar.has(k));
+  state.complexFields=fieldSet.filter(k=>nonScalar.has(k));
+  state.values={}; state.filters={}; state.missCount={}; state.presCount={};
+  for(const k of state.scalarFields){ state.values[k]=new Map(); state.filters[k]={vals:new Set(),missing:false,present:false}; state.missCount[k]=0; state.presCount[k]=0; }
+  const total=state.records.length;
+  for(const r of state.records){
+    for(const k of state.scalarFields){
+      const has = r && (k in r); const v = has? r[k] : undefined;
+      if(isMissing(v)){ state.missCount[k]++; }
+      else { state.presCount[k]++; const m=state.values[k]; const kk=valKey(v); m.set(kk,(m.get(kk)||0)+1); }
+    }
+  }
+}
+
+/* ---------- load ---------- */
+function loadData(raw, name){
+  state.raw=raw; state.fileName=name||"";
+  const cands=arrayCandidates(raw);
+  const sel=$("#recordArray");
+  sel.innerHTML = cands.map(c=>'<option value="'+esc(c.key)+'">'+esc(c.label)+' ('+c.n+')</option>').join("")
+                  || '<option value="__root__">'+(raw&&typeof raw==="object"?"(whole object — 1 record)":"(no records)")+'</option>';
+  // default pick: prefer named like findRecords
+  let def = cands[0] ? cands[0].key : "__root__";
+  const prefer=["authors","records","data","items","rows","results"];
+  for(const p of prefer){ if(cands.some(c=>c.key===p)){ def=p; break; } }
+  state.recordKey=def; sel.value=def;
+  setRecordSource(def, true);
+  $("#fileName").textContent = name ? (name+" — "+state.records.length+" records") : "";
+  $("#emptyState").style.display = state.records.length ? "none":"block";
+}
+function setRecordSource(key, keepSearch){
+  state.recordKey=key;
+  state.records=recordsFor(state.raw,key)||[];
+  state.meta=metaFor(state.raw,key);
+  analyze();
+  state.titleSel=null; state.subSel=null;
+  state.page=0; if(!keepSearch){ state.search=""; $("#globalSearch").value=""; }
+  populateFieldSelects();
+  renderMeta(); renderFilters(); apply();
+}
+
+/* ---------- metadata ---------- */
+function renderMeta(){
+  const rows=[];
+  rows.push(metaRow("records", state.records.length));
+  rows.push(metaRow("record array", state.recordKey==="__root__"?"(root array)":state.recordKey));
+  rows.push(metaRow("fields", state.fields.length+"  ("+state.scalarFields.length+" filterable / one-to-one)"));
+  rows.push(metaRow("one-to-one fields", state.scalarFields.join(", ")));
+  if(state.complexFields.length) rows.push(metaRow("nested fields", state.complexFields.join(", ")));
+  for(const k in state.meta){
+    const v=state.meta[k];
+    rows.push(metaRow(k, (v && typeof v==="object")?renderValue(v):esc(String(v)), true));
+  }
+  $("#metaBody").innerHTML=rows.join("");
+}
+function metaRow(k,v,raw){ return '<div class="kv"><span class="k">'+esc(k)+'</span><span class="v">'+(raw?v:esc(String(v)))+'</span></div>'; }
+
+/* ---------- filters ---------- */
+function renderFilters(){
+  $("#filters").innerHTML = state.scalarFields.map(k=>
+    '<details class="ffield" data-field="'+esc(k)+'">'+
+      '<summary><span>'+esc(k)+'</span><span class="n">'+state.values[k].size+'</span></summary>'+
+      '<div class="fbody" data-rendered="0"></div>'+
+    '</details>').join("");
+  $("#filterHint").textContent="("+state.scalarFields.length+" fields)";
+}
+function renderFieldBody(det){
+  const k=det.dataset.field, body=det.querySelector(".fbody");
+  if(body.dataset.rendered==="1") return; body.dataset.rendered="1";
+  const f=state.filters[k];
+  const many=state.values[k].size>12;          // stable decision (full distribution)
+  body.innerHTML=
+    '<div class="miss-row">'+
+      '<label><input type="checkbox" data-field="'+esc(k)+'" data-kind="present"'+(f.present?" checked":"")+'> not missing <span class="vc" data-c="present">'+fcount("facetPres",k)+'</span></label>'+
+      '<label><input type="checkbox" data-field="'+esc(k)+'" data-kind="missing"'+(f.missing?" checked":"")+'> missing <span class="vc" data-c="missing">'+fcount("facetMiss",k)+'</span></label>'+
+    '</div>'+
+    '<div class="row1">'+
+      (many?'<input class="fsearch" placeholder="filter values…">':'')+
+      '<button class="mini act-all">all</button><button class="mini act-none">none</button>'+
+    '</div><div class="vals"></div>';
+  paintVals(det);
+  const fs=body.querySelector(".fsearch");
+  if(fs) fs.addEventListener("input",()=>paintVals(det,fs.value));
+  body.querySelector(".act-all").addEventListener("click",()=>toggleAllValues(k,true,det));
+  body.querySelector(".act-none").addEventListener("click",()=>toggleAllValues(k,false,det));
+}
+function updateMissRow(det){                    // refresh the present/missing counts live
+  const k=det.dataset.field;
+  const p=det.querySelector('.vc[data-c="present"]'); if(p) p.textContent=fcount("facetPres",k);
+  const m=det.querySelector('.vc[data-c="missing"]'); if(m) m.textContent=fcount("facetMiss",k);
+}
+/* update every field's summary count and repaint any open filter body live */
+function refreshFacetUI(){
+  document.querySelectorAll(".ffield").forEach(det=>{
+    const k=det.dataset.field;
+    const n=det.querySelector("summary .n"); if(n) n.textContent=fcount("facetVal",k).size;
+    const body=det.querySelector(".fbody");
+    if(det.open && body && body.dataset.rendered==="1"){
+      updateMissRow(det);
+      const fs=body.querySelector(".fsearch");
+      paintVals(det, fs?fs.value:"");
+    }
+  });
+}
+function sortVals(entries){
+  return entries.sort((a,b)=>{
+    const na=parseFloat(a[0]), nb=parseFloat(b[0]);
+    const an=!isNaN(na)&&/^-?\d/.test(a[0]), bn=!isNaN(nb)&&/^-?\d/.test(b[0]);
+    if(an&&bn) return na-nb; if(an) return -1; if(bn) return 1;
+    return a[0].toLowerCase()<b[0].toLowerCase()?-1:1;
+  });
+}
+function paintVals(det,q){
+  const k=det.dataset.field, vals=det.querySelector(".vals"), checked=state.filters[k].vals;
+  const fmap=fcount("facetVal",k);                  // values available under the OTHER filters
+  let entries=[...fmap.entries()];
+  for(const sel of checked){ if(!fmap.has(sel)) entries.push([sel,0]); }  // keep checked visible
+  entries=sortVals(entries);
+  if(q){ const ql=q.toLowerCase(); entries=entries.filter(e=>e[0].toLowerCase().includes(ql)); }
+  const CAP=1000, shown=entries.slice(0,CAP);
+  vals.innerHTML=shown.map(([val,c])=>
+    '<div class="vrow"><label><input type="checkbox" data-field="'+esc(k)+'" data-val="'+esc(val)+'"'+(checked.has(val)?" checked":"")+'>'+
+    '<span class="vtxt">'+esc(val)+'</span></label><span class="vc">'+c+'</span></div>').join("")
+    + (entries.length>CAP?'<div class="muted" style="padding:4px">…'+(entries.length-CAP)+' more — refine the filter</div>':'');
+}
+function toggleAllValues(k,on,det){
+  const set=state.filters[k].vals;
+  det.querySelectorAll('.vals input[type=checkbox]').forEach(cb=>{ cb.checked=on; const v=cb.dataset.val; if(on)set.add(v); else set.delete(v); });
+  markActive(det); apply();
+}
+function markActive(det){ const f=state.filters[det.dataset.field]; det.dataset.active=(f.vals.size||f.missing||f.present)?"1":"0"; }
+
+/* ---------- filtering + paging ---------- */
+function fieldActive(f){ return !!(f && (f.vals.size||f.missing||f.present)); }
+function fieldOK(r,k,f){                      // does r satisfy field k's filter?
+  const v=(r&&k in r)?r[k]:undefined, miss=isMissing(v);
+  if(f.present&&!miss) return true;
+  if(f.missing&&miss) return true;
+  if(f.vals.size&&!miss&&f.vals.has(valKey(v))) return true;
+  return false;
+}
+function searchOK(r){
+  if(!state.search) return true;
+  const q=state.search;
+  for(const k in r){ const v=r[k]; if(v==null) continue;
+    const s=(typeof v==="object")?JSON.stringify(v):String(v);
+    if(s.toLowerCase().includes(q)) return true; }
+  return false;
+}
+function recordMatches(r){
+  for(const k of state.scalarFields){
+    const f=state.filters[k];
+    if(fieldActive(f) && !fieldOK(r,k,f)) return false;
+  }
+  return searchOK(r);
+}
+
+/* Honest facets: for each field, the values+counts available given the OTHER
+   active filters (and search). A record contributes to field k's facet iff it
+   fails AT MOST field k itself — so it fails 0 active filters (counts toward all
+   fields) or exactly k (counts toward k only). O(records × active filters). */
+function computeFacets(){
+  const SF=state.scalarFields;
+  const fv={}, fm={}, fp={};
+  for(const k of SF){ fv[k]=new Map(); fm[k]=0; fp[k]=0; }
+  const active=SF.filter(k=>fieldActive(state.filters[k]));
+  for(const r of state.records){
+    if(!searchOK(r)) continue;
+    let failed=null, cnt=0;
+    for(const k of active){
+      if(!fieldOK(r,k,state.filters[k])){ cnt++; if(cnt>1) break; failed=k; }
+    }
+    if(cnt>=2) continue;
+    const targets = cnt===1 ? [failed] : SF;
+    for(const k of targets){
+      const v=(r&&k in r)?r[k]:undefined;
+      if(isMissing(v)) fm[k]++;
+      else { fp[k]++; const kk=valKey(v); fv[k].set(kk,(fv[k].get(kk)||0)+1); }
+    }
+  }
+  state.facetVal=fv; state.facetMiss=fm; state.facetPres=fp;
+}
+function fcount(map,k){ return (state[map]&&state[map][k])||(map==="facetVal"?new Map():0); }
+function apply(){
+  state.filtered=state.records.filter(recordMatches);
+  computeFacets();
+  refreshFacetUI();
+  $("#resCount").textContent=state.filtered.length.toLocaleString();
+  const ps=state.pageSize==="all"?(state.filtered.length||1):state.pageSize;
+  const pages=Math.max(1,Math.ceil(state.filtered.length/ps));
+  if(state.page>=pages) state.page=pages-1; if(state.page<0) state.page=0;
+  const start=state.page*ps, end=Math.min(start+ps,state.filtered.length);
+  state.pageItems=state.filtered.slice(start,end);
+  $("#pgInfo").textContent=state.filtered.length
+    ?((start+1).toLocaleString()+"–"+end.toLocaleString()+" / "+state.filtered.length.toLocaleString()+"  (pg "+(state.page+1)+"/"+pages+")"):"0";
+  $(".pager").style.display = state.pageSize==="all" ? "none" : "flex";
+  renderCards();
+  syncURL();
+}
+
+/* ---------- URL sync (shareable filter state) ---------- */
+function syncURL(){
+  if(state.restoring) return;
+  const p=new URLSearchParams();
+  if(state.fileName) p.set("file", state.fileName);
+  if(state.recordKey && arrayCandidates(state.raw).length>1) p.set("rec", state.recordKey);
+  if(state.search) p.set("q", state.search);
+  if(state.pageSize!==100) p.set("ps", String(state.pageSize));
+  if(state.viewMode!=="cards") p.set("view", state.viewMode);
+  if(state.titleSel) p.set("title", state.titleSel);
+  if(state.subSel!==null) p.set("sub", state.subSel===""?"__none__":state.subSel);
+  if(state.page>0) p.set("page", String(state.page+1));
+  for(const k of state.scalarFields){
+    const f=state.filters[k]; if(!f) continue;
+    if(f.present) p.append("p."+k,"1");
+    if(f.missing) p.append("m."+k,"1");
+    for(const v of f.vals) p.append("f."+k, v);
+  }
+  const qs=p.toString();
+  history.replaceState(null,"", qs?("?"+qs):location.pathname);
+}
+function restoreFromParams(params){
+  // record source first — switching it re-analyzes and resets filters
+  const rec=params.get("rec");
+  if(rec && arrayCandidates(state.raw).some(c=>c.key===rec)){ $("#recordArray").value=rec; setRecordSource(rec,true); }
+  const ps=params.get("ps"); if(ps){ state.pageSize=ps==="all"?"all":(+ps||100); $("#pageSize").value=ps; }
+  const view=params.get("view"); if(view){ state.viewMode=view; $("#viewMode").value=view; }
+  const title=params.get("title"); if(title){ state.titleSel=title; $("#titleField").value=title; }
+  const sub=params.get("sub");
+  if(sub!==null){ state.subSel = sub==="__none__"?"":sub; $("#subField").value=state.subSel; }
+  const q=params.get("q"); if(q){ state.search=q; $("#globalSearch").value=q; }
+  for(const [key,val] of params){
+    if(key.startsWith("f.")){ const f=state.filters[key.slice(2)]; if(f) f.vals.add(val); }
+    else if(key.startsWith("p.")){ const f=state.filters[key.slice(2)]; if(f) f.present=true; }
+    else if(key.startsWith("m.")){ const f=state.filters[key.slice(2)]; if(f) f.missing=true; }
+  }
+  const pg=params.get("page"); if(pg){ state.page=Math.max(0,(+pg||1)-1); }
+  document.querySelectorAll(".ffield").forEach(d=>{
+    const f=state.filters[d.dataset.field];
+    if(f) d.dataset.active=(f.vals.size||f.missing||f.present)?"1":"0";
+    const b=d.querySelector(".fbody"); if(b){ b.dataset.rendered="0"; if(d.open) renderFieldBody(d); }
+  });
+}
+
+/* ---------- cards ---------- */
+function renderValue(v){
+  if(v===null||v===undefined) return '<span class="muted">—</span>';
+  if(Array.isArray(v)){
+    if(!v.length) return '<span class="muted">[]</span>';
+    if(typeof v[0]==="object"&&v[0]!==null) return v.map(renderObjLine).join("");
+    return v.map(x=>'<span class="chip">'+esc(String(x))+'</span>').join("");
+  }
+  if(typeof v==="object")
+    return '<div class="obj">'+Object.entries(v).map(([k,val])=>'<div class="kv"><span class="k">'+esc(k)+'</span><span class="v">'+renderValue(val)+'</span></div>').join("")+'</div>';
+  if(typeof v==="boolean") return '<span class="bool b-'+v+'">'+v+'</span>';
+  const s=String(v);
+  if(/^https?:\/\//i.test(s)) return '<a href="'+esc(s)+'" target="_blank" rel="noopener">'+esc(s)+'</a>';
+  return esc(s);
+}
+function renderObjLine(o){
+  const t=o.title||o.name||null;
+  if(t){ const bits=[]; for(const k of ["journal","venue","source","year","date"]) if(o[k]!=null) bits.push(esc(String(o[k])));
+    return '<div class="pub">'+esc(String(t))+(bits.length?' <span class="j">— '+bits.join(", ")+'</span>':'')+'</div>'; }
+  return '<div class="pub">'+Object.entries(o).map(([k,val])=>esc(k)+": "+esc(typeof val==="object"?JSON.stringify(val):String(val))).join("; ")+'</div>';
+}
+function scalarOptions(){ return state.scalarFields.map(k=>'<option value="'+esc(k)+'">'+esc(k)+'</option>').join(""); }
+function populateFieldSelects(){
+  const t=$("#titleField"); t.innerHTML=scalarOptions(); t.value=titleField();
+  const s=$("#subField"); s.innerHTML='<option value="">(none)</option>'+scalarOptions();
+  const sf=subtitleField(); s.value = sf===null ? "" : sf;
+}
+function titleField(){
+  if(state.titleSel && state.scalarFields.includes(state.titleSel)) return state.titleSel;
+  for(const k of ["name","title","display_name","label","id","uid"]) if(state.scalarFields.includes(k)) return k;
+  return state.scalarFields[0]||state.fields[0];
+}
+function subtitleField(){
+  if(state.subSel!==null) return (state.subSel==="" || !state.scalarFields.includes(state.subSel)) ? null : state.subSel;
+  return null;   // no subtitle by default — generic; the user picks one in Display options
+}
+function renderCards(){
+  $("#cards").className="grid"+(state.viewMode==="full"?" full":"");
+  const tf=titleField();
+  const sub=subtitleField();
+  const full=state.viewMode==="full";
+  $("#cards").innerHTML=state.pageItems.map((r,idx)=>{
+    const title=(r&&r[tf]!=null)?esc(String(r[tf])):'<span class="muted">(untitled)</span>';
+    const subv=(sub&&sub!==tf&&r&&!isMissing(r[sub]))?'<span class="sub">'+esc(String(r[sub]))+'</span>':'';
+    let kv='';
+    for(const k of state.scalarFields){ if(k===tf||k===sub) continue;
+      const v=r?r[k]:undefined; if(isMissing(v)) continue;   // hide empty scalar fields
+      kv+='<div class="kv"><span class="k">'+esc(k)+'</span><span class="v">'+renderValue(v)+'</span></div>'; }
+    if(full) kv='<div class="kvwrap">'+kv+'</div>';
+    let cf='';
+    for(const k of state.complexFields){ const v=r?r[k]:null;
+      const n=Array.isArray(v)?v.length:(v&&typeof v==="object"?Object.keys(v).length:0);
+      if(v==null||n===0) continue;   // skip empty non-scalar fields
+      cf+='<details class="cf" data-idx="'+idx+'" data-field="'+esc(k)+'"><summary>'+esc(k)+' ('+n+')</summary><div class="cf-body" data-rendered="0"></div></details>'; }
+    return '<div class="card"><h3>'+title+' '+subv+'</h3>'+kv+cf+'</div>';
+  }).join("");
+}
+
+/* ---------- events ---------- */
+$("#filters").addEventListener("toggle",e=>{ if(e.target.classList.contains("ffield")&&e.target.open) renderFieldBody(e.target); },true);
+$("#filters").addEventListener("change",e=>{
+  const cb=e.target; if(cb.type!=="checkbox") return;
+  const k=cb.dataset.field, f=state.filters[k];
+  if(cb.dataset.kind==="missing") f.missing=cb.checked;
+  else if(cb.dataset.kind==="present") f.present=cb.checked;
+  else { if(cb.checked) f.vals.add(cb.dataset.val); else f.vals.delete(cb.dataset.val); }
+  markActive(cb.closest(".ffield")); state.page=0; apply();
+});
+$("#cards").addEventListener("toggle",e=>{
+  const d=e.target; if(!d.classList.contains("cf")||!d.open) return;
+  const body=d.querySelector(".cf-body"); if(body.dataset.rendered==="1") return;
+  body.dataset.rendered="1"; const r=state.pageItems[+d.dataset.idx];
+  body.innerHTML=renderValue(r?r[d.dataset.field]:null);
+},true);
+
+$("#globalSearch").addEventListener("input",e=>{ state.search=e.target.value.trim().toLowerCase(); state.page=0; apply(); });
+$("#pageSize").addEventListener("change",e=>{ state.pageSize=e.target.value==="all"?"all":+e.target.value; state.page=0; apply(); });
+$("#recordArray").addEventListener("change",e=>setRecordSource(e.target.value,false));
+$("#titleField").addEventListener("change",e=>{ state.titleSel=e.target.value; renderCards(); syncURL(); });
+$("#subField").addEventListener("change",e=>{ state.subSel=e.target.value; renderCards(); syncURL(); });
+$("#viewMode").addEventListener("change",e=>{ state.viewMode=e.target.value; renderCards(); syncURL(); });
+$("#first").onclick=()=>{state.page=0;apply()};
+$("#prev").onclick=()=>{state.page--;apply()};
+$("#next").onclick=()=>{state.page++;apply()};
+$("#last").onclick=()=>{state.page=1e9;apply()};
+$("#resetFilters").onclick=()=>{
+  for(const k in state.filters){ const f=state.filters[k]; f.vals.clear(); f.missing=false; f.present=false; }
+  document.querySelectorAll(".ffield").forEach(d=>{ d.dataset.active="0"; const b=d.querySelector(".fbody"); if(b){ b.dataset.rendered="0"; if(d.open) renderFieldBody(d);} });
+  state.search=""; $("#globalSearch").value=""; state.page=0; apply();
+};
+$("#collapseAll").onclick=()=>document.querySelectorAll(".ffield[open]").forEach(d=>d.open=false);
+
+function pickFile(){ $("#fileInput").click(); }
+$("#loadBtn").onclick=pickFile; $("#emptyLoad").onclick=pickFile;
+$("#fileInput").addEventListener("change",e=>{ const f=e.target.files[0]; if(!f) return;
+  const rd=new FileReader(); rd.onload=()=>{ try{ loadData(JSON.parse(rd.result),f.name);}catch(err){alert("Invalid JSON: "+err.message);} }; rd.readAsText(f); });
+const drop=$("#drop");
+window.addEventListener("dragover",e=>{e.preventDefault();drop.style.display="flex"});
+["dragleave","drop"].forEach(ev=>window.addEventListener(ev,e=>{ if(ev==="dragleave"&&e.relatedTarget) return; drop.style.display="none"; }));
+window.addEventListener("drop",e=>{ e.preventDefault(); const f=e.dataTransfer.files[0]; if(!f) return;
+  const rd=new FileReader(); rd.onload=()=>{ try{ loadData(JSON.parse(rd.result),f.name);}catch(err){alert("Invalid JSON: "+err.message);} }; rd.readAsText(f); });
+
+(async function(){
+  const params=new URLSearchParams(location.search);
+  const file=params.get("file");          // no default — blank page until a file is given
+  if(file){
+    state.restoring=true;
+    try{
+      const res=await fetch(file,{cache:"no-store"});
+      if(res.ok){
+        loadData(await res.json(),file);   // builds default view (URL writes suppressed)
+        restoreFromParams(params);          // rehydrate filters/search/display from the URL
+        state.restoring=false;
+        apply();                            // filter, render, and write the canonical URL
+        return;
+      }
+    }catch(e){}
+    state.restoring=false;
+  }
+  $("#emptyState").style.display="block";
+})();
+</script>
+</body>
+</html>
