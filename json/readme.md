@@ -10,25 +10,31 @@ It is fully generic: it inspects whatever JSON you load, discovers the record
 array and the fields, and builds the filter UI automatically. Nothing is
 hard-coded to a particular dataset.
 
-![JSON DB Viewer — sidebar filters, faceted counts, and record cards](screenshot.png)
-
 ---
 
 ## Quick start
 
-The easiest way is the bundled **`serve.sh`** helper. It serves the viewer
+The easiest way is the bundled **`serve-json.sh`** helper. It serves the viewer
 together with any JSON file — located *anywhere* on disk — and opens it in your
 browser:
 
 ```bash
 cd json
-./serve.sh path/to/data.json        # optional second arg: port (default 8753)
+./serve-json.sh path/to/data.json                   # default port 8753
+./serve-json.sh path/to/data.json 9000              # custom port (a bare integer)
+./serve-json.sh path/to/data.json q=harvard ps=all  # open with a preset view
 ```
 
 It symlinks the viewer and your JSON into an isolated temp directory, starts
 `python3 -m http.server` bound to `127.0.0.1`, opens the browser at the correct
 `?file=` URL, and tears it all down on Ctrl-C. The JSON does not need to sit next
 to the viewer.
+
+Any extra arguments are appended to the page URL as query parameters, so you can
+launch the viewer in a preset state — global search (`q=…`), paging (`ps=…`),
+view mode (`view=full`), or filters (`f.<field>=<value>`, repeatable for OR). A
+bare-integer argument is taken as the port. See [Shareable URLs](#shareable-urls)
+for the full parameter list.
 
 ### Serving it yourself
 
@@ -102,20 +108,7 @@ fields are shown as collapsible expanders on each card, not as filters.
 
 ## Layout
 
-```
-┌───────────────────────────────────────────────────────────────────┐
-│ JSON DB Viewer   <filename>   [ search…            ]  N records  « ‹ pg › » │  header
-├──────────────┬────────────────────────────────────────────────────┤
-│  Filters     │  ▸ Metadata & dataset info                          │
-│   ▸ field A  │                                                     │
-│   ▸ field B  │   ┌── card ──┐ ┌── card ──┐ ┌── card ──┐            │
-│   …          │   │ title sub │ │ title sub │ │ …        │           │
-│              │   │ k: v      │ │ k: v      │ │          │           │
-│  Display     │   │ ▸ nested  │ │ ▸ nested  │ │          │           │
-│   options    │   └──────────┘ └──────────┘ └──────────┘            │
-│  [Load JSON] │                                                     │
-└──────────────┴────────────────────────────────────────────────────┘
-```
+![JSON DB Viewer — sidebar filters, faceted counts, and record cards](screenshot.png)
 
 - **Header:** title, current filename, a full-width **search** box, the live
   matched-record count, and pagination (`«` first, `‹` prev, page info, `›` next,
@@ -269,5 +262,6 @@ missing.
 ## Files
 
 - `json-browser.html` — the viewer (everything is inside it).
-- `serve.sh` — helper that serves the viewer with a given JSON file and opens it.
+- `serve-json.sh` — helper that serves the viewer with a given JSON file and opens it.
+- `example.sh` — sample invocation of `serve-json.sh` with a preset view.
 - `readme.md` — this document.
