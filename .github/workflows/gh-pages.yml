@@ -1,0 +1,69 @@
+name: Deploy to GitHub Pages
+
+# Publishes a selected subset of files from `main` to GitHub Pages.
+# One-time setup: repo Settings → Pages → Build and deployment → Source =
+# "GitHub Actions". After that, every push to main (re)deploys the site.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:        # allow manual runs from the Actions tab
+
+# Permissions required by the official Pages deploy actions.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow only one concurrent deployment; don't cancel an in-progress one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Assemble the site from the selected files
+        run: |
+          set -euo pipefail
+
+          # ===== Files to publish (paths relative to the repo root). EDIT ME. =====
+          FILES=(
+            "json/json-browser.html"      # the json viewer app
+          )
+          # The first file is also copied to index.html, so the site root
+          #   https://<user>.github.io/<repo>/
+          # loads it directly. Set INDEX_FROM="" to skip that aliasing.
+          INDEX_FROM="${FILES[0]}"
+          # ========================================================================
+
+          rm -rf _site && mkdir -p _site
+          for f in "${FILES[@]}"; do
+            if [[ ! -f "$f" ]]; then
+              echo "::error::listed file not found in repo: $f"
+              exit 1
+            fi
+            cp "$f" "_site/$(basename "$f")"
+          done
+          if [[ -n "$INDEX_FROM" ]]; then
+            cp "$INDEX_FROM" _site/index.html
+          fi
+
+          echo "Site contents:"
+          ls -la _site
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
