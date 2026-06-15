@@ -1,8 +1,8 @@
 #!/usr/bin/env zsh
-# serve-json.zsh — serve json-browser.html with a given JSON file via a local
+# serve.sh — serve json-browser.html with a given JSON file via a local
 # Python HTTP server and open it in the browser.
 #
-#   Usage: ./serve-json.zsh <data.json> [port]
+#   Usage: ./serve.sh <data.json> [port]
 #
 # The JSON may live anywhere on disk: the script serves an isolated temp
 # directory containing symlinks to the viewer and the JSON, so http.server can

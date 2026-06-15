@@ -10,26 +10,49 @@ It is fully generic: it inspects whatever JSON you load, discovers the record
 array and the fields, and builds the filter UI automatically. Nothing is
 hard-coded to a particular dataset.
 
+![JSON DB Viewer — sidebar filters, faceted counts, and record cards](screenshot.png)
+
 ---
 
 ## Quick start
 
+The easiest way is the bundled **`serve.sh`** helper. It serves the viewer
+together with any JSON file — located *anywhere* on disk — and opens it in your
+browser:
+
 ```bash
-# from the directory that contains json-browser.html
+cd json
+./serve.sh path/to/data.json        # optional second arg: port (default 8753)
+```
+
+It symlinks the viewer and your JSON into an isolated temp directory, starts
+`python3 -m http.server` bound to `127.0.0.1`, opens the browser at the correct
+`?file=` URL, and tears it all down on Ctrl-C. The JSON does not need to sit next
+to the viewer.
+
+### Serving it yourself
+
+If you'd rather run the server by hand, do it from the directory that contains
+`json-browser.html`:
+
+```bash
+cd json
 python3 -m http.server 8753 --bind 127.0.0.1
 # then open:
 #   http://127.0.0.1:8753/json-browser.html
-#   http://127.0.0.1:8753/                      (index.html is a symlink to it)
-#   http://127.0.0.1:8753/?file=path/to/data.json
+#   http://127.0.0.1:8753/json-browser.html?file=path/to/data.json
 ```
 
-A static server is recommended because the viewer loads data with `fetch()`, which
-most browsers block for `file://` URLs (CORS). If you open the file directly from
-disk, the `?file=` auto-load won't work, but the **Load JSON…** button and
-drag-and-drop still do.
+A static server is needed for the `?file=` auto-load and the shareable links
+because the viewer fetches data with `fetch()`, which browsers block for `file://`
+URLs (CORS).
 
-`index.html` in the repo root is a symlink to `json-browser.html`, so a server
-started in the root serves the viewer at `/`.
+### Opening directly from disk (`file://`)
+
+You can also open `json-browser.html` straight from disk — double-click it, or open
+its `file://` URL — with no server at all. Since `fetch()` is blocked for `file://`,
+the `?file=` parameter and shareable links won't work, but the **Load JSON…** button
+and drag-and-drop do. This is the quickest way to glance at a local file.
 
 ---
 
@@ -246,4 +269,5 @@ missing.
 ## Files
 
 - `json-browser.html` — the viewer (everything is inside it).
-- `index.html` — symlink to `json-browser.html` so a static server serves it at `/`.
+- `serve.sh` — helper that serves the viewer with a given JSON file and opens it.
+- `readme.md` — this document.
