@@ -57,8 +57,8 @@ URLs (CORS).
 
 You can also open `json-browser.html` straight from disk — double-click it, or open
 its `file://` URL — with no server at all. Since `fetch()` is blocked for `file://`,
-the `?file=` parameter and shareable links won't work, but the **Load JSON…** button
-and drag-and-drop do. This is the quickest way to glance at a local file.
+the `?file=` parameter and shareable links won't work, but the **Load file…**
+button and drag-and-drop do. This is the quickest way to glance at a local file.
 
 ---
 
@@ -70,12 +70,13 @@ Four ways, any of which works with any JSON file:
    page (e.g. `?file=top5-approach/authors.json`) or can be an absolute URL the
    server/CORS allows. This is the only method that participates in shareable
    links (below).
-2. **Load from URL** — the field in the left sidebar (under *Display*). Paste a
-   URL (or relative path) and press **Load** or Enter; the app fetches it,
-   displays it, and writes it into `?file=` so the view becomes a shareable link.
-   The remote server must permit cross-origin (CORS) requests.
-3. **Load JSON…** button — bottom of the left sidebar (under *Display*). Opens a
-   native file picker.
+2. **Load from URL** — the field in the **Metadata & dataset info** panel at the
+   top of the record area. Paste a URL (or relative path) and press the button or
+   Enter; the app fetches it, displays it, and writes it into `?file=` so the view
+   becomes a shareable link. The remote server must permit cross-origin (CORS)
+   requests.
+3. **Load file…** button — next to it, in the same panel. Opens a native file
+   picker. (Both loaders also appear on the "No JSON loaded" start page.)
 4. **Drag and drop** — drop a `.json` file anywhere on the window.
 
 With no `?file=` parameter the app starts on a **blank page** showing a
@@ -98,7 +99,8 @@ is being regenerated).
   a single record;
 - when several arrays exist, it auto-selects the first of
   `authors, records, data, items, rows, results`, else the first array found. You
-  can change the choice with **Main record array** (Display options). Any
+  can change the choice with **Main record array** in the **Metadata & dataset
+  info** panel. Any
   top-level keys that are *not* the chosen record array are shown as dataset
   metadata.
 
@@ -119,17 +121,18 @@ fields are shown as collapsible expanders on each card, not as filters.
   `»` last). The pager is hidden when *Records per page* is `all`.
 - **Left sidebar:** **Reset filters** / **Collapse all** actions, the **Filters**
   list (one collapsible panel per scalar field), and at the bottom the **Display**
-  options and the **Load JSON…** button.
-- **Main area:** a collapsed **Metadata & dataset info** panel (record count,
-  field inventory, and any non-record top-level keys from the file), then the
-  records as cards.
+  options.
+- **Main area:** a collapsed **Metadata & dataset info** panel — the data source
+  controls, the record-array choice, the field on/off switches, the record count,
+  and any non-record top-level keys from the file — then the records as cards.
 
 ---
 
 ## Filtering
 
-Each scalar field has a collapsible filter panel (the count next to its name is
-how many distinct values are currently selectable). Open one to get:
+Each scalar field that is switched on has a collapsible filter panel (the count
+next to its name is how many distinct values are currently selectable; fields
+[switched off](#switching-fields-on-and-off) have no panel). Open one to get:
 
 - **not missing** / **missing** checkboxes with counts — keep records that have
   (or lack) a value for the field. "Missing" means `null`, `undefined`, or empty
@@ -172,7 +175,6 @@ combines (AND) with the field filters and also drives the facet counts.
 | Option | Effect |
 |--------|--------|
 | **Records per page** | `100` / `500` / `1000` / `all`. `all` hides the pager. |
-| **Main record array** | Which top-level array (or the root/whole object) to treat as the records. Changing it re-analyzes fields and resets filters. |
 | **Card title field** | Which scalar field is the card heading. Defaults to the first of `name, title, display_name, label, id, uid`, else the first scalar field. |
 | **Card subtitle field** | Optional smaller heading next to the title; `(none)` by default. |
 | **View** | `cards` (responsive grid) or `full-width records` (one record per row, wider key/value layout). |
@@ -180,6 +182,65 @@ combines (AND) with the field filters and also drives the facet counts.
 
 The title and subtitle fields are omitted from the card's key/value body to avoid
 repetition.
+
+---
+
+## Metadata & dataset info panel
+
+The collapsed panel above the records holds everything about *what* is loaded, as
+opposed to *how* it is displayed:
+
+| Control | Effect |
+|---------|--------|
+| **load JSON** | Paste a URL and press **Load from URL**, or pick a local file with **Load file…**. Same two loaders as the start page. |
+| **main record array** | Which top-level array (or the root/whole object) to treat as the records. Changing it re-analyzes fields, and resets filters and field switches. |
+| **one-to-one fields** / **nested fields** | The field inventory, each name a checkbox that switches the field off in the records *and* in the filter list — see below. |
+
+Below the controls it reports the record count, the field counts, the
+[identifier schemes detected](#identifier-auto-linking), and every top-level key
+of the file that is not the record array.
+
+### Switching fields on and off
+
+Each field in the inventory has a checkbox. Unchecking one switches the field off
+**everywhere in the view at once**:
+
+- it leaves the records — the key/value row for a scalar field, the collapsible
+  expander for a nested one;
+- its **filter panel disappears** from the sidebar, and the Filters heading counts
+  what is left (`9 of 12 fields`);
+- its **facets are no longer computed**, so it costs nothing while off.
+
+Unchecked names are struck through, and the field count row shows how many are
+off. The **all** / **none** buttons on each row switch a whole group.
+
+### Switching off a field you were filtering on
+
+Nothing is lost, and nothing filters invisibly. The field's filter is **suspended**
+while the field is off: matching widens as if that filter were cleared, and the
+record count updates immediately so the change is never silent. Its chip in the
+inventory turns accent-colored and says so on hover.
+
+Switch the field back on and the panel returns exactly as you left it — same open
+state, same checked values — and the filter reapplies. Nothing is rebuilt in
+between; the panel is only hidden.
+
+A shareable link carries both parts (`h.<field>=1` and the suspended `f.<field>=…`),
+so a reloaded view behaves identically.
+
+**Global search still matches on switched-off fields.** Search is for finding
+records, not for choosing what to display, so it stays complete — searching a
+hidden field's contents still works.
+
+### Fields that cannot be switched off
+
+The **card title and subtitle fields** appear in the heading, so their boxes are
+shown fixed on (highlighted, not clickable) and **none** skips them. Choosing a
+switched-off field as the title switches it back on.
+
+The whole state lives in the URL (`h.<field>=1` per field), so a link reproduces
+exactly the set of fields you left showing. **Reset filters** clears filters and
+the search but not the field switches — use **all** to bring every field back.
 
 ---
 
@@ -330,8 +391,9 @@ short):
 | `f.<field>=<value>` | A selected value for `<field>` (repeated for multiple values) |
 | `p.<field>=1` | The "not missing" checkbox for `<field>` |
 | `m.<field>=1` | The "missing" checkbox for `<field>` |
+| `h.<field>=1` | `<field>` is switched off — hidden from the records and its filter suspended (see [the metadata panel](#switching-fields-on-and-off)) |
 
-Field names are prefixed (`f.`/`p.`/`m.`) so they can never collide with the
+Field names are prefixed (`f.`/`p.`/`m.`/`h.`) so they can never collide with the
 reserved parameters. Example:
 
 ```

@@ -40,7 +40,20 @@
   .pager .pg{padding:0 6px;color:var(--muted)}
   details.meta{margin-bottom:10px;background:var(--panel);border:1px solid var(--line);border-radius:10px}
   details.meta>summary{cursor:pointer;padding:9px 12px;font-weight:600}
+  details.meta>summary .mhint{font-weight:500;font-size:12px;color:var(--muted)}
   .metabody{padding:4px 12px 12px;display:grid;grid-template-columns:1fr;gap:2px}
+  .metaload{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+  .metaload input[type=url]{flex:1 1 240px;min-width:120px}
+  /* field on/off toggles */
+  .ftog{display:inline-flex;gap:5px;align-items:center;background:var(--chip);border-radius:999px;
+        padding:1px 9px 1px 6px;margin:1px 3px 1px 0;font-size:12px;cursor:pointer;user-select:none}
+  .ftog:hover{background:#e3e7ec}
+  .ftog input{margin:0}
+  .ftog.off{opacity:.6;text-decoration:line-through}
+  .ftog.fixed{cursor:default;background:var(--accent-soft);color:var(--muted)}
+  .ftog.susp{color:var(--accent);opacity:.85}   /* off, but still holds a filter */
+  .togacts{display:inline-flex;gap:3px;margin-right:8px;vertical-align:1px}
+  .togacts .mini{padding:1px 6px;font-size:11px}
   .side h2{font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:10px 4px 6px}
   .ffield{border:1px solid var(--line);border-radius:8px;margin-bottom:7px;overflow:hidden;background:#fff}
   .ffield>summary{cursor:pointer;padding:7px 9px;font-weight:600;display:flex;justify-content:space-between;gap:6px;align-items:center}
@@ -132,9 +145,6 @@
       <label>Records per page
         <select id="pageSize"><option>100</option><option>500</option><option>1000</option><option value="all">all</option></select>
       </label>
-      <label>Main record array
-        <select id="recordArray"></select>
-      </label>
       <label>Card title field
         <select id="titleField"></select>
       </label>
@@ -147,17 +157,23 @@
       <label>Auto-link IDs
         <select id="autoLink"><option value="1">on</option><option value="0">off</option></select>
       </label>
-      <input type="url" id="urlInput" placeholder="https://…/data.json" autocomplete="off">
-      <button id="urlLoadBtn">Load from URL</button>
-      <button id="loadBtn">Load JSON…</button>
-      <input type="file" id="fileInput" accept=".json,application/json" hidden>
     </div>
   </aside>
 
   <main class="main">
     <details class="meta" id="metaBox">
-      <summary>Metadata &amp; dataset info</summary>
-      <div class="metabody" id="metaBody"></div>
+      <summary>Metadata &amp; dataset info <span class="mhint">— data source, record array, shown fields</span></summary>
+      <div class="metabody">
+        <!-- static controls: never re-rendered, so their listeners survive renderMeta() -->
+        <div class="kv"><span class="k">load JSON</span><span class="v metaload">
+          <input type="url" id="urlInput" placeholder="https://…/data.json" autocomplete="off">
+          <button id="urlLoadBtn">Load from URL</button>
+          <button id="loadBtn">Load file…</button>
+          <input type="file" id="fileInput" accept=".json,application/json" hidden>
+        </span></div>
+        <div class="kv"><span class="k">main record array</span><span class="v"><select id="recordArray"></select></span></div>
+        <div id="metaBody"></div>
+      </div>
     </details>
     <div id="cards" class="grid"></div>
     <div id="emptyState" class="empty" style="display:none">
@@ -189,6 +205,7 @@ const state = {
   filters:{},            // field -> {vals:Set, missing:bool, present:bool}
   search:"", pageSize:100, page:0,
   titleSel:null, subSel:null, viewMode:"cards",
+  hidden:new Set(),      // fields switched off in the metadata panel (display only)
   autoLink:true, linkPlan:{}, linkFields:{},   // identifier auto-linking (presentational only)
   filtered:[], pageItems:[], restoring:false
 };
@@ -405,7 +422,7 @@ function setRecordSource(key, keepSearch){
   state.records=recordsFor(state.raw,key)||[];
   state.meta=metaFor(state.raw,key);
   analyze();
-  state.titleSel=null; state.subSel=null;
+  state.titleSel=null; state.subSel=null; state.hidden.clear();   // field names differ per array
   state.page=0; if(!keepSearch){ state.search=""; $("#globalSearch").value=""; }
   populateFieldSelects();
   renderMeta(); renderFilters(); apply();
@@ -415,10 +432,10 @@ function setRecordSource(key, keepSearch){
 function renderMeta(){
   const rows=[];
   rows.push(metaRow("records", state.records.length));
-  rows.push(metaRow("record array", state.recordKey==="__root__"?"(root array)":state.recordKey));
-  rows.push(metaRow("fields", state.fields.length+"  ("+state.scalarFields.length+" filterable / one-to-one)"));
-  rows.push(metaRow("one-to-one fields", state.scalarFields.join(", ")));
-  if(state.complexFields.length) rows.push(metaRow("nested fields", state.complexFields.join(", ")));
+  rows.push(metaRow("fields", state.fields.length+"  ("+state.scalarFields.length+" filterable / one-to-one)"+
+    '<span id="hidNote" class="muted">'+hiddenNote()+'</span>', true));
+  rows.push(toggleRow("one-to-one fields", state.scalarFields, "scalar"));
+  if(state.complexFields.length) rows.push(toggleRow("nested fields", state.complexFields, "complex"));
   const lf=Object.keys(state.linkFields);
   if(lf.length) rows.push(metaRow("linked ID fields",
     lf.map(k=>k+" ("+state.linkFields[k]+")").join(", ")+(state.autoLink?"":"   — auto-linking off")));
@@ -429,6 +446,26 @@ function renderMeta(){
   $("#metaBody").innerHTML=rows.join("");
 }
 function metaRow(k,v,raw){ return '<div class="kv"><span class="k">'+esc(k)+'</span><span class="v">'+(raw?v:esc(String(v)))+'</span></div>'; }
+const hiddenNote = () => state.hidden.size ? "   — "+state.hidden.size+" hidden" : "";
+/* One checkbox per field: unchecking hides it from the records, nothing else.
+   The title/subtitle fields are shown in the card heading, so their boxes are
+   fixed on — the Display selects, not this row, decide those. */
+function toggleRow(label, fields, group){
+  if(!fields.length) return "";
+  const tf=titleField(), sub=subtitleField();
+  const chips=fields.map(k=>{
+    if(k===tf||k===sub) return '<label class="ftog fixed" title="in the card heading — set under Display">'+
+      '<input type="checkbox" checked disabled>'+esc(k)+'</label>';
+    const on=!state.hidden.has(k), susp=!on&&fieldActive(state.filters[k]);
+    return '<label class="ftog'+(on?"":" off")+(susp?" susp":"")+'"'+
+      (susp?' title="its filter is suspended while the field is off"':'')+
+      '><input type="checkbox" data-fieldtog="'+esc(k)+'"'+(on?" checked":"")+'>'+esc(k)+'</label>';
+  }).join("");
+  return '<div class="kv"><span class="k">'+esc(label)+'</span><span class="v">'+
+    '<span class="togacts"><button class="mini" data-tog="all" data-group="'+group+'">all</button>'+
+    '<button class="mini" data-tog="none" data-group="'+group+'">none</button></span>'+
+    chips+'</span></div>';
+}
 
 /* ---------- filters ---------- */
 function renderFilters(){
@@ -437,7 +474,20 @@ function renderFilters(){
       '<summary><span>'+esc(k)+'</span><span class="n">'+state.values[k].size+'</span></summary>'+
       '<div class="fbody" data-rendered="0"></div>'+
     '</details>').join("");
-  $("#filterHint").textContent="("+state.scalarFields.length+" fields)";
+  syncFilterVisibility();
+}
+/* A field switched off in the metadata panel loses its filter panel here. The
+   panel is only display:none — its open state, rendered body and selected values
+   survive, so switching the field back on restores the filter as it was. */
+function syncFilterVisibility(){
+  let shown=0;
+  document.querySelectorAll(".ffield").forEach(det=>{
+    const off=state.hidden.has(det.dataset.field);
+    det.style.display=off?"none":"";
+    if(!off) shown++;
+  });
+  const tot=state.scalarFields.length;
+  $("#filterHint").textContent="("+(shown<tot?shown+" of "+tot:tot)+" fields)";
 }
 function renderFieldBody(det){
   const k=det.dataset.field, body=det.querySelector(".fbody");
@@ -468,6 +518,7 @@ function updateMissRow(det){                    // refresh the present/missing c
 function refreshFacetUI(){
   document.querySelectorAll(".ffield").forEach(det=>{
     const k=det.dataset.field;
+    if(state.hidden.has(k)) return;              // no panel on screen, no facet computed
     const n=det.querySelector("summary .n"); if(n) n.textContent=fcount("facetVal",k).size;
     const body=det.querySelector(".fbody");
     if(det.open && body && body.dataset.rendered==="1"){
@@ -524,6 +575,7 @@ function searchOK(r){
 }
 function recordMatches(r){
   for(const k of state.scalarFields){
+    if(state.hidden.has(k)) continue;          // switched off -> its filter is suspended
     const f=state.filters[k];
     if(fieldActive(f) && !fieldOK(r,k,f)) return false;
   }
@@ -535,7 +587,7 @@ function recordMatches(r){
    fails AT MOST field k itself — so it fails 0 active filters (counts toward all
    fields) or exactly k (counts toward k only). O(records × active filters). */
 function computeFacets(){
-  const SF=state.scalarFields;
+  const SF=state.scalarFields.filter(k=>!state.hidden.has(k));   // no panel, no facet to feed
   const fv={}, fm={}, fp={};
   for(const k of SF){ fv[k]=new Map(); fm[k]=0; fp[k]=0; }
   const active=SF.filter(k=>fieldActive(state.filters[k]));
@@ -592,6 +644,7 @@ function syncURL(){
     if(f.missing) p.append("m."+k,"1");
     for(const v of f.vals) p.append("f."+k, v);
   }
+  for(const k of state.fields) if(state.hidden.has(k)) p.append("h."+k,"1");   // switched-off fields
   const qs=p.toString();
   history.replaceState(null,"", qs?("?"+qs):location.pathname);
 }
@@ -601,7 +654,7 @@ function restoreFromParams(params){
   if(rec && arrayCandidates(state.raw).some(c=>c.key===rec)){ $("#recordArray").value=rec; setRecordSource(rec,true); }
   const ps=params.get("ps"); if(ps){ state.pageSize=ps==="all"?"all":(+ps||100); $("#pageSize").value=ps; }
   const view=params.get("view"); if(view){ state.viewMode=view; $("#viewMode").value=view; }
-  const links=params.get("links"); if(links==="0"){ state.autoLink=false; $("#autoLink").value="0"; renderMeta(); }
+  const links=params.get("links"); if(links==="0"){ state.autoLink=false; $("#autoLink").value="0"; }
   const title=params.get("title"); if(title){ state.titleSel=title; $("#titleField").value=title; }
   const sub=params.get("sub");
   if(sub!==null){ state.subSel = sub==="__none__"?"":sub; $("#subField").value=state.subSel; }
@@ -610,7 +663,10 @@ function restoreFromParams(params){
     if(key.startsWith("f.")){ const f=state.filters[key.slice(2)]; if(f) f.vals.add(val); }
     else if(key.startsWith("p.")){ const f=state.filters[key.slice(2)]; if(f) f.present=true; }
     else if(key.startsWith("m.")){ const f=state.filters[key.slice(2)]; if(f) f.missing=true; }
+    else if(key.startsWith("h.")){ const k=key.slice(2); if(state.fields.includes(k)) state.hidden.add(k); }
   }
+  renderMeta();                 // reflect restored field switches / auto-link note
+  syncFilterVisibility();       // and drop the filter panels of switched-off fields
   const pg=params.get("page"); if(pg){ state.page=Math.max(0,(+pg||1)-1); }
   document.querySelectorAll(".ffield").forEach(d=>{
     const f=state.filters[d.dataset.field];
@@ -676,12 +732,12 @@ function renderCards(){
               : th?linkHTML(th.url,String(tv),linkNote(th),"idlink"):esc(String(tv));
     const subv=(sub&&sub!==tf&&r&&!isMissing(r[sub]))?'<span class="sub">'+esc(String(r[sub]))+'</span>':'';
     let kv='';
-    for(const k of state.scalarFields){ if(k===tf||k===sub) continue;
+    for(const k of state.scalarFields){ if(k===tf||k===sub||state.hidden.has(k)) continue;
       const v=r?r[k]:undefined; if(isMissing(v)) continue;   // hide empty scalar fields
       kv+='<div class="kv"><span class="k">'+esc(k)+'</span><span class="v">'+renderValue(v,k)+'</span></div>'; }
     if(full) kv='<div class="kvwrap">'+kv+'</div>';
     let cf='';
-    for(const k of state.complexFields){ const v=r?r[k]:null;
+    for(const k of state.complexFields){ if(state.hidden.has(k)) continue; const v=r?r[k]:null;
       const n=Array.isArray(v)?v.length:(v&&typeof v==="object"?Object.keys(v).length:0);
       if(v==null||n===0) continue;   // skip empty non-scalar fields
       cf+='<details class="cf" data-idx="'+idx+'" data-field="'+esc(k)+'"><summary>'+esc(k)+' ('+n+')</summary><div class="cf-body" data-rendered="0"></div></details>'; }
@@ -706,11 +762,32 @@ $("#cards").addEventListener("toggle",e=>{
   body.innerHTML=renderValue(r?r[d.dataset.field]:null, d.dataset.field);
 },true);
 
+/* field on/off toggles — delegated, so renderMeta() can rebuild the rows freely */
+$("#metaBody").addEventListener("change",e=>{
+  const cb=e.target, k=cb.dataset&&cb.dataset.fieldtog; if(!k) return;
+  if(cb.checked) state.hidden.delete(k); else state.hidden.add(k);
+  const chip=cb.closest(".ftog");                            // keep focus: no full re-render
+  chip.classList.toggle("off",!cb.checked);
+  chip.classList.toggle("susp",!cb.checked&&fieldActive(state.filters[k]));
+  chip.title=chip.classList.contains("susp")?"its filter is suspended while the field is off":"";
+  const n=$("#hidNote"); if(n) n.textContent=hiddenNote();
+  syncFilterVisibility(); apply();      // a suspended filter changes what matches
+});
+$("#metaBody").addEventListener("click",e=>{
+  const b=e.target.closest("button[data-tog]"); if(!b) return;
+  const list=b.dataset.group==="complex"?state.complexFields:state.scalarFields;
+  const tf=titleField(), sub=subtitleField();
+  for(const k of list){ if(k===tf||k===sub) continue;
+    if(b.dataset.tog==="all") state.hidden.delete(k); else state.hidden.add(k); }
+  renderMeta(); syncFilterVisibility(); apply();
+});
+
 $("#globalSearch").addEventListener("input",e=>{ state.search=e.target.value.trim().toLowerCase(); state.page=0; apply(); });
 $("#pageSize").addEventListener("change",e=>{ state.pageSize=e.target.value==="all"?"all":+e.target.value; state.page=0; apply(); });
 $("#recordArray").addEventListener("change",e=>setRecordSource(e.target.value,false));
-$("#titleField").addEventListener("change",e=>{ state.titleSel=e.target.value; renderCards(); syncURL(); });
-$("#subField").addEventListener("change",e=>{ state.subSel=e.target.value; renderCards(); syncURL(); });
+/* a field promoted to the heading stops being hidden — the two would contradict */
+$("#titleField").addEventListener("change",e=>{ state.titleSel=e.target.value; state.hidden.delete(state.titleSel); renderMeta(); renderCards(); syncURL(); });
+$("#subField").addEventListener("change",e=>{ state.subSel=e.target.value; state.hidden.delete(state.subSel); renderMeta(); renderCards(); syncURL(); });
 $("#viewMode").addEventListener("change",e=>{ state.viewMode=e.target.value; renderCards(); syncURL(); });
 $("#autoLink").addEventListener("change",e=>{ state.autoLink=e.target.value==="1"; renderMeta(); renderCards(); syncURL(); });
 $("#first").onclick=()=>{state.page=0;apply()};
@@ -720,7 +797,9 @@ $("#last").onclick=()=>{state.page=1e9;apply()};
 $("#resetFilters").onclick=()=>{
   for(const k in state.filters){ const f=state.filters[k]; f.vals.clear(); f.missing=false; f.present=false; }
   document.querySelectorAll(".ffield").forEach(d=>{ d.dataset.active="0"; const b=d.querySelector(".fbody"); if(b){ b.dataset.rendered="0"; if(d.open) renderFieldBody(d);} });
-  state.search=""; $("#globalSearch").value=""; state.page=0; apply();
+  state.search=""; $("#globalSearch").value=""; state.page=0;
+  renderMeta();            // no filters left to suspend, so clear those chip markers
+  apply();
 };
 $("#collapseAll").onclick=()=>document.querySelectorAll(".ffield[open]").forEach(d=>d.open=false);
 
