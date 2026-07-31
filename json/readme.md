@@ -176,6 +176,7 @@ combines (AND) with the field filters and also drives the facet counts.
 | **Card title field** | Which scalar field is the card heading. Defaults to the first of `name, title, display_name, label, id, uid`, else the first scalar field. |
 | **Card subtitle field** | Optional smaller heading next to the title; `(none)` by default. |
 | **View** | `cards` (responsive grid) or `full-width records` (one record per row, wider key/value layout). |
+| **Auto-link IDs** | `on` (default) / `off`. Turns recognized identifiers into links to their canonical resolver — see [Identifier auto-linking](#identifier-auto-linking). |
 
 The title and subtitle fields are omitted from the card's key/value body to avoid
 repetition.
@@ -196,7 +197,111 @@ repetition.
   - an **object** renders as nested key/value rows.
 - **Values** are formatted by type: booleans get a true/false pill, strings that
   start with `http(s)://` become clickable links (open in a new tab), `null`/empty
-  shows as an em dash.
+  shows as an em dash, and recognized identifiers (DOI, ORCID, …) become links to
+  their canonical resolver — see [Identifier auto-linking](#identifier-auto-linking).
+- **Long URLs are collapsed.** A URL in the data longer than 20 characters is shown
+  as the single word *hyperlink*, with the full address in the tooltip and in the
+  link itself — a page of records stays readable instead of being dominated by
+  addresses. Shorter URLs are shown in full. This applies only to URLs that were
+  literally in the data; auto-linked identifiers always display their identifier,
+  however long, since that value is the thing worth seeing.
+
+---
+
+## Identifier auto-linking
+
+Values that are recognizable as persistent identifiers are rendered as links to
+the canonical resolver, so a bare `10.1257/aer.20190623` or `0000-0002-1825-0097`
+becomes clickable without the dataset having to carry a URL for it.
+
+The **displayed text is always the raw identifier**; only the link target is
+derived, and it is never collapsed the way a long literal URL is.
+Auto-generated links carry a dotted underline, and their tooltip names the scheme
+and the full target (`DOI → https://doi.org/10.1257/…`), so they can never be
+mistaken for links that were literally in the data. Nothing is fetched while
+rendering — the target is only visited if you click it.
+
+Auto-linking is **presentational only**. Filters, facet counts, the global search,
+and shareable URLs all keep working on the raw values, so a view behaves
+identically with linking on or off.
+
+### What is recognized
+
+| Scheme | Recognized as | Resolver |
+|---|---|---|
+| DOI | `10.1257/aer.20190623`, `doi:10.…` | `doi.org` |
+| ORCID | `0000-0002-1825-0097` | `orcid.org` |
+| arXiv | `arXiv:2101.03970`; bare `2101.03970` in an `arxiv…` field | `arxiv.org` |
+| PMCID | `PMC7092803` | PubMed Central |
+| PubMed | digits in a `pmid`/`pubmed…` field | `pubmed.ncbi.nlm.nih.gov` |
+| RePEc | `RePEc:edi:deharus` | EDIRC |
+| OpenAlex | `W2741809807`, `A5023888391`, … | `openalex.org` |
+| ROR | `03vek6s52` | `ror.org` |
+| ISSN | `0002-8282` in an `issn…` field | `portal.issn.org` |
+| ISBN | 10/13 digits in an `isbn…` field | Open Library |
+| Wikidata | `Q13371` in a `wikidata`/`qid` field | `wikidata.org` |
+| SSRN | digits in an `ssrn…` field | SSRN abstract page |
+| Semantic Scholar | 40-hex hash, or a `corpus_id` | `semanticscholar.org` |
+| Handle | `hdl:2027/…`, or `20.500.12345/6789` in a `handle` field | `hdl.handle.net` |
+| VIAF, ISNI | digits in a `viaf…` / `isni…` field | `viaf.org`, `isni.org` |
+| GitHub | `owner/repo` in a `github…`/`repo` field | `github.com` |
+| Email | an address in an `email`/`mail`/`contact` field | `mailto:` |
+| Bare host | `www.example.org/econ` in a `url`/`homepage`/`website`/… field | `https://` prepended |
+
+### How the decision is made
+
+Detection is deliberately conservative — a wrong link is worse than a missing one.
+A value is linked only if it passes one of three checks, tried in order:
+
+1. **Self-identifying** — the value alone is unambiguous (a DOI, an ORCID, a
+   prefixed arXiv ID, a `PMC…`, a `RePEc:edi:…`). Linked in any field, at any
+   nesting depth.
+2. **Field-name gated** — the pattern is ambiguous, so the field name must also
+   match. `pmid: 12345678` links; `world_rank: 12345678` does not. Field names are
+   compared case- and punctuation-insensitively, so `DOI`, `doi` and `Article DOI`
+   all count.
+3. **Whole-column agreement** — a distinctive pattern with no name hint (a bare
+   OpenAlex ID in a field called `id`) links only when at least 90% of the
+   column's distinct values match the same scheme. One value that coincidentally
+   looks like an identifier in a column of ordinary text is never linked.
+
+Identifiers inside **arrays** (a list of DOIs) and **nested objects** are linked
+too; nested leaves are judged by their own key. If the card **title** field is
+itself an identifier the heading becomes a link, keeping the heading's own color
+so it still reads as a heading.
+
+Filter panels in the sidebar stay plain text, since each value row is a checkbox.
+
+The **Metadata & dataset info** panel lists what was detected, e.g.
+`linked ID fields   doi (DOI), orcid (ORCID), repec_id (RePEc/EDIRC)`. That is the
+place to look if a column is not linking, or is linking as the wrong scheme.
+
+### Turning it off, and adding schemes
+
+Set **Auto-link IDs** to `off` in the Display options (`links=0` in the URL) to
+render every value as plain text.
+
+To teach the viewer a new scheme, add one row to the `LINKERS` table near the top
+of the `<script>` in `json-browser.html`:
+
+```js
+{id:"cik", label:"SEC EDGAR", tier:"name", fields:/(^|_)cik(_|$)/,
+ re:/^(\d{1,10})$/,
+ url:m=>"https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK="+m[1]},
+```
+
+`tier` is `"self"` (value is unambiguous on its own), `"name"` (requires the
+`fields` gate), or `"plan"` (requires the gate or 90% column agreement). `re` must
+be anchored; `url` may return `null` to decline a value that the regex matched but
+that fails a further check (this is how the ISBN length check works). Nothing else
+in the file needs to change.
+
+`link-test.json` is a fixture covering every scheme plus the near-misses that must
+*not* link; load it after changing the table:
+
+```bash
+./serve-json.sh link-test.json ps=all
+```
 
 ---
 
@@ -218,6 +323,7 @@ short):
 | `q` | Global search string |
 | `ps` | Records per page (`100`/`500`/`1000`/`all`); omitted when `100` |
 | `view` | `full` for full-width records (omitted for the default `cards`) |
+| `links` | `0` disables identifier auto-linking (omitted when on, the default) |
 | `title` | Card title field (when changed from the default) |
 | `sub` | Card subtitle field; `__none__` means explicitly no subtitle |
 | `page` | 1-based page number (when not on page 1) |
@@ -258,6 +364,10 @@ missing.
   type-ahead or other filters to reach the rest.
 - A "scalar" field must be scalar in **every** record; if a field is sometimes an
   object/array it is treated as nested (no filter).
+- Identifier detection is a heuristic keyed on value shape and English-language
+  field names. A column named `dokumentid` will not be gated, and a mixed column
+  where fewer than 90% of values share a scheme is left unlinked. The escape
+  hatches are the `LINKERS` table (add a row) and **Auto-link IDs** `off`.
 - For `file://` use, only the picker and drag-and-drop work (browsers block
   `fetch()` of local files); serve over HTTP to use `?file=` and shareable links.
 
@@ -268,4 +378,6 @@ missing.
 - `json-browser.html` — the viewer (everything is inside it).
 - `serve-json.sh` — helper that serves the viewer with a given JSON file and opens it.
 - `example.sh` — sample invocation of `serve-json.sh` with a preset view.
+- `link-test.json` — fixture for [identifier auto-linking](#identifier-auto-linking):
+  every recognized scheme plus the near-misses that must stay plain text.
 - `readme.md` — this document.

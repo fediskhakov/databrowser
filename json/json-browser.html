@@ -80,6 +80,10 @@
   .grid.full .card .kv{grid-template-columns:none;display:flex;gap:6px;border-top:none;padding:1px 0;align-items:baseline}
   .grid.full .card .kv .k::after{content:":"}
   .chip{display:inline-block;background:var(--chip);border-radius:999px;padding:1px 8px;margin:1px 2px 1px 0;font-size:12px}
+  /* auto-generated identifier links — marked so they can't be mistaken for links in the data */
+  a.idlink{border-bottom:1px dotted currentColor}
+  a.idlink:hover{text-decoration:none;border-bottom-style:solid}
+  .card h3 a.idlink{color:inherit}          /* a linked heading still reads as a heading */
   .bool{font-weight:600}.b-true{color:var(--ok)}.b-false{color:var(--no)}
   details.cf{margin:3px 0;border-top:1px solid #f1f3f5;padding-top:3px}
   details.cf>summary{cursor:pointer;color:var(--accent);font-size:12px}
@@ -140,6 +144,9 @@
       <label>View
         <select id="viewMode"><option value="cards">cards</option><option value="full">full-width records</option></select>
       </label>
+      <label>Auto-link IDs
+        <select id="autoLink"><option value="1">on</option><option value="0">off</option></select>
+      </label>
       <input type="url" id="urlInput" placeholder="https://…/data.json" autocomplete="off">
       <button id="urlLoadBtn">Load from URL</button>
       <button id="loadBtn">Load JSON…</button>
@@ -182,8 +189,155 @@ const state = {
   filters:{},            // field -> {vals:Set, missing:bool, present:bool}
   search:"", pageSize:100, page:0,
   titleSel:null, subSel:null, viewMode:"cards",
+  autoLink:true, linkPlan:{}, linkFields:{},   // identifier auto-linking (presentational only)
   filtered:[], pageItems:[], restoring:false
 };
+
+/* ---------- identifier auto-linking ----------
+   Turn well-known identifiers (DOI, ORCID, OpenAlex, ROR, …) into links to their
+   canonical resolver. Purely presentational: filtering, faceting, search and the
+   URL state all keep working on raw values, and nothing is fetched at render time.
+
+   Each entry: {id, label, tier, fields, re, url}
+     tier "self" — the value alone is unambiguous; links in any field, any depth.
+     tier "name" — value pattern is ambiguous, so the field name must match `fields`.
+     tier "plan" — distinctive pattern with no name hint; links only where the field
+                   name matches OR buildLinkPlan() saw ~the whole column match it.
+   `re` must be anchored. `url(m, value)` returns the target, or null to decline
+   (used for checks a regex can't express, e.g. ISBN length).
+   Order is most-specific-first; the first resolver that matches wins.
+   To add a scheme, add one row — nothing else in the file needs to change.       */
+const encPath = s => String(s).split("/").map(encodeURIComponent).join("/");
+const digits  = s => String(s).replace(/[\s-]/g,"").toUpperCase();
+
+const LINKERS = [
+  /* --- self-identifying --- */
+  {id:"doi", label:"DOI", tier:"self", fields:/doi/,
+   re:/^(?:doi:)?(10\.\d{4,9}\/[^\s"]+)$/i,       // legacy DOIs may contain < > ; ( )
+   url:m=>"https://doi.org/"+encPath(m[1])},
+  {id:"orcid", label:"ORCID", tier:"self", fields:/orcid/,
+   re:/^(?:orcid:)?((?:\d{4}-){3}\d{3}[\dX])$/i,
+   url:m=>"https://orcid.org/"+m[1].toUpperCase()},
+  {id:"arxiv", label:"arXiv", tier:"self", fields:/arxiv/,
+   re:/^arxiv:\s*(\d{4}\.\d{4,5}(?:v\d+)?|[a-z-]+(?:\.[A-Za-z]{2})?\/\d{7}(?:v\d+)?)$/i,
+   url:m=>"https://arxiv.org/abs/"+encPath(m[1])},
+  {id:"pmcid", label:"PMCID", tier:"self", fields:/pmc/,
+   re:/^(PMC\d{5,9})$/i,
+   url:m=>"https://www.ncbi.nlm.nih.gov/pmc/articles/"+m[1].toUpperCase()+"/"},
+  {id:"repec", label:"RePEc/EDIRC", tier:"self", fields:/repec/,
+   re:/^RePEc:edi:([a-z0-9]+)$/i,                       // other RePEc namespaces resolve differently
+   url:m=>"https://edirc.repec.org/data/"+m[1].toLowerCase()+".html"},
+  {id:"hdl", label:"Handle", tier:"self", fields:/(^|_)(hdl|handle)(_|$)/,
+   re:/^hdl:(\S+)$/i,
+   url:m=>"https://hdl.handle.net/"+encPath(m[1])},
+
+  /* --- field-name gated --- */
+  {id:"pmid", label:"PubMed", tier:"name", fields:/(^|_)pmid(_|$)|pubmed/,
+   re:/^(\d{4,9})$/,
+   url:m=>"https://pubmed.ncbi.nlm.nih.gov/"+m[1]+"/"},
+  {id:"issn", label:"ISSN", tier:"name", fields:/issn/,
+   re:/^(\d{4})-?(\d{3}[\dX])$/i,
+   url:m=>"https://portal.issn.org/resource/ISSN/"+m[1]+"-"+m[2].toUpperCase()},
+  {id:"isbn", label:"ISBN", tier:"name", fields:/isbn/,
+   re:/^([\dX][\dX-]{8,21})$/i,
+   url:m=>{ const d=digits(m[1]); return /^\d{9}[\dX]$|^\d{13}$/.test(d) ? "https://openlibrary.org/isbn/"+d : null; }},
+  {id:"wikidata", label:"Wikidata", tier:"name", fields:/wikidata|(^|_)qid(_|$)/,
+   re:/^(Q\d+)$/,
+   url:m=>"https://www.wikidata.org/wiki/"+m[1]},
+  {id:"arxiv_bare", label:"arXiv", tier:"name", fields:/arxiv/,
+   re:/^(\d{4}\.\d{4,5}(?:v\d+)?|[a-z-]+(?:\.[A-Za-z]{2})?\/\d{7}(?:v\d+)?)$/i,
+   url:m=>"https://arxiv.org/abs/"+encPath(m[1])},
+  {id:"ssrn", label:"SSRN", tier:"name", fields:/ssrn/,
+   re:/^(\d{4,9})$/,
+   url:m=>"https://papers.ssrn.com/sol3/papers.cfm?abstract_id="+m[1]},
+  {id:"s2paper", label:"Semantic Scholar", tier:"name", fields:/(^|_)s2(_|$)|semantic_?scholar/,
+   re:/^([0-9a-f]{40})$/i,
+   url:m=>"https://www.semanticscholar.org/paper/"+m[1].toLowerCase()},
+  {id:"s2corpus", label:"S2 CorpusID", tier:"name", fields:/corpus_?id|(^|_)s2(_|$)/,
+   re:/^(\d{4,12})$/,
+   url:m=>"https://api.semanticscholar.org/CorpusID:"+m[1]},
+  {id:"github", label:"GitHub", tier:"name", fields:/github|(^|_)repo(_|$)/,
+   re:/^([\w.-]+)\/([\w.-]+)$/,
+   url:m=>/^\.|\.\./.test(m[1]+m[2]) ? null : "https://github.com/"+m[1]+"/"+m[2]},
+  {id:"email", label:"Email", tier:"name", fields:/e?mail|contact/,
+   re:/^([^@\s]+@[^@\s]+\.[A-Za-z]{2,})$/,
+   url:m=>"mailto:"+encodeURI(m[1])},
+  {id:"host", label:"Web", tier:"name", fields:/(^|_)(url|uri|link|links|homepage|website|site|page|www)(_|$)/,
+   re:/^((?:www\.)?[a-z0-9][a-z0-9.-]*\.[a-z]{2,}(?:[\/?#]\S*)?)$/i,
+   url:m=>"https://"+m[1]},
+  {id:"viaf", label:"VIAF", tier:"name", fields:/viaf/,
+   re:/^(\d{5,22})$/,
+   url:m=>"https://viaf.org/viaf/"+m[1]},
+  {id:"isni", label:"ISNI", tier:"name", fields:/isni/,
+   re:/^([\dX][\dX\s-]{14,22})$/i,
+   url:m=>{ const d=digits(m[1]); return /^\d{15}[\dX]$/.test(d) ? "https://isni.org/isni/"+d : null; }},
+  {id:"handle", label:"Handle", tier:"name", fields:/(^|_)(hdl|handle)(_|$)/,
+   re:/^(\d{2,5}(?:\.\d+)*\/\S+)$/,
+   url:m=>"https://hdl.handle.net/"+encPath(m[1])},
+
+  /* --- distinctive but ambiguous: need a name gate or a whole-column match --- */
+  {id:"openalex", label:"OpenAlex", tier:"plan", fields:/openalex/,
+   re:/^([WASICPFT]\d{7,10})$/,
+   url:m=>"https://openalex.org/"+m[1].toUpperCase()},
+  {id:"ror", label:"ROR", tier:"plan", fields:/(^|_)ror(_|$)/,
+   re:/^(0[0-9a-hj-km-np-tv-z]{6}\d{2})$/i,            // Crockford base32 + 2 check digits
+   url:m=>"https://ror.org/"+m[1].toLowerCase()}
+];
+const LINKER_BY_ID = {}; for(const L of LINKERS) LINKER_BY_ID[L.id]=L;
+
+const normKey = k => String(k).toLowerCase().replace(/[^a-z0-9]+/g,"_");
+function tryLinker(L,s){
+  const m=L.re.exec(s); if(!m) return null;
+  const u=L.url(m,s);   if(!u) return null;             // resolver declined (failed its own check)
+  return {id:L.id, label:L.label, url:u};
+}
+/* Which resolver, if any, claims this value in this field? Cheap: anchored regexes,
+   at most a handful of candidates per cell, nothing compiled at call time. */
+function resolveLink(value, key){
+  const s=String(value).trim();
+  if(!s || s.length>300) return null;                   // no pathological inputs
+  for(const L of LINKERS){ if(L.tier!=="self") continue; const h=tryLinker(L,s); if(h) return h; }
+  if(key!=null){
+    const nk=normKey(key);
+    for(const L of LINKERS){ if(L.fields&&L.fields.test(nk)){ const h=tryLinker(L,s); if(h) return h; } }
+    const planned=state.linkPlan[key];                  // promoted for this whole column
+    if(planned) return tryLinker(LINKER_BY_ID[planned], s);
+  }
+  return null;
+}
+const autoLinkFor = (v,key) => state.autoLink ? resolveLink(v,key) : null;
+
+/* Promote an ambiguous resolver for a scalar field when it covers ~the whole column,
+   and record the dominant scheme per field for the metadata panel. Runs in analyze(),
+   so rendering only ever tests the field's own candidates. */
+function buildLinkPlan(){
+  state.linkPlan={}; state.linkFields={};
+  const CAP=200, ambiguous=LINKERS.filter(L=>L.tier==="plan");
+  for(const k of state.scalarFields){
+    const vals=[];
+    for(const v of state.values[k].keys()){ vals.push(v); if(vals.length>=CAP) break; }
+    if(!vals.length) continue;
+    const need=Math.ceil(vals.length*0.9);
+    for(const L of ambiguous){
+      let n=0; for(const v of vals) if(tryLinker(L,v)) n++;
+      if(n>=need){ state.linkPlan[k]=L.id; break; }
+    }
+    const tally={};
+    for(const v of vals){ const h=resolveLink(v,k); if(h) tally[h.id]=(tally[h.id]||0)+1; }
+    let best=null; for(const id in tally) if(!best||tally[id]>tally[best]) best=id;
+    if(best) state.linkFields[k]=LINKER_BY_ID[best].label;
+  }
+}
+function linkHTML(href,text,note,cls){
+  return '<a'+(cls?' class="'+cls+'"':'')+' href="'+esc(href)+'" target="_blank" rel="noopener noreferrer"'+
+         (note?' title="'+esc(note)+'"':'')+'>'+esc(text)+'</a>';
+}
+const linkNote = h => h.label+" → "+h.url;
+/* A URL that was literally in the data and is too long to read shows as one word
+   instead, with the full address in the tooltip. Identifier links are never
+   shortened — their text is the identifier, which is the point of showing it. */
+const URL_TEXT_MAX = 20;
+const urlText = s => s.length>URL_TEXT_MAX ? "hyperlink" : s;
 
 /* ---------- record-array discovery ---------- */
 function arrayCandidates(raw){
@@ -227,6 +381,7 @@ function analyze(){
       else { state.presCount[k]++; const m=state.values[k]; const kk=valKey(v); m.set(kk,(m.get(kk)||0)+1); }
     }
   }
+  buildLinkPlan();          // reuse the distinct-value maps to decide per-field linking
 }
 
 /* ---------- load ---------- */
@@ -264,9 +419,12 @@ function renderMeta(){
   rows.push(metaRow("fields", state.fields.length+"  ("+state.scalarFields.length+" filterable / one-to-one)"));
   rows.push(metaRow("one-to-one fields", state.scalarFields.join(", ")));
   if(state.complexFields.length) rows.push(metaRow("nested fields", state.complexFields.join(", ")));
+  const lf=Object.keys(state.linkFields);
+  if(lf.length) rows.push(metaRow("linked ID fields",
+    lf.map(k=>k+" ("+state.linkFields[k]+")").join(", ")+(state.autoLink?"":"   — auto-linking off")));
   for(const k in state.meta){
     const v=state.meta[k];
-    rows.push(metaRow(k, (v && typeof v==="object")?renderValue(v):esc(String(v)), true));
+    rows.push(metaRow(k, renderValue(v,k), true));
   }
   $("#metaBody").innerHTML=rows.join("");
 }
@@ -424,6 +582,7 @@ function syncURL(){
   if(state.search) p.set("q", state.search);
   if(state.pageSize!==100) p.set("ps", String(state.pageSize));
   if(state.viewMode!=="cards") p.set("view", state.viewMode);
+  if(!state.autoLink) p.set("links","0");
   if(state.titleSel) p.set("title", state.titleSel);
   if(state.subSel!==null) p.set("sub", state.subSel===""?"__none__":state.subSel);
   if(state.page>0) p.set("page", String(state.page+1));
@@ -442,6 +601,7 @@ function restoreFromParams(params){
   if(rec && arrayCandidates(state.raw).some(c=>c.key===rec)){ $("#recordArray").value=rec; setRecordSource(rec,true); }
   const ps=params.get("ps"); if(ps){ state.pageSize=ps==="all"?"all":(+ps||100); $("#pageSize").value=ps; }
   const view=params.get("view"); if(view){ state.viewMode=view; $("#viewMode").value=view; }
+  const links=params.get("links"); if(links==="0"){ state.autoLink=false; $("#autoLink").value="0"; renderMeta(); }
   const title=params.get("title"); if(title){ state.titleSel=title; $("#titleField").value=title; }
   const sub=params.get("sub");
   if(sub!==null){ state.subSel = sub==="__none__"?"":sub; $("#subField").value=state.subSel; }
@@ -460,25 +620,33 @@ function restoreFromParams(params){
 }
 
 /* ---------- cards ---------- */
-function renderValue(v){
+/* `key` is the field the value came from — the gate for name-based auto-linking.
+   Arrays pass their field name down to the items; object entries use their own key. */
+function renderValue(v,key){
   if(v===null||v===undefined) return '<span class="muted">—</span>';
   if(Array.isArray(v)){
     if(!v.length) return '<span class="muted">[]</span>';
-    if(typeof v[0]==="object"&&v[0]!==null) return v.map(renderObjLine).join("");
-    return v.map(x=>'<span class="chip">'+esc(String(x))+'</span>').join("");
+    if(typeof v[0]==="object"&&v[0]!==null) return v.map(o=>renderObjLine(o,key)).join("");
+    return v.map(x=>'<span class="chip">'+renderScalar(x,key)+'</span>').join("");
   }
   if(typeof v==="object")
-    return '<div class="obj">'+Object.entries(v).map(([k,val])=>'<div class="kv"><span class="k">'+esc(k)+'</span><span class="v">'+renderValue(val)+'</span></div>').join("")+'</div>';
+    return '<div class="obj">'+Object.entries(v).map(([k,val])=>'<div class="kv"><span class="k">'+esc(k)+'</span><span class="v">'+renderValue(val,k)+'</span></div>').join("")+'</div>';
+  return renderScalar(v,key);
+}
+function renderScalar(v,key){
   if(typeof v==="boolean") return '<span class="bool b-'+v+'">'+v+'</span>';
   const s=String(v);
-  if(/^https?:\/\//i.test(s)) return '<a href="'+esc(s)+'" target="_blank" rel="noopener">'+esc(s)+'</a>';
-  return esc(s);
+  if(/^https?:\/\//i.test(s))                                    // a link that was in the data
+    return linkHTML(s, urlText(s), s.length>URL_TEXT_MAX?s:null, null);
+  const hit=autoLinkFor(s,key);                                  // a link we derived
+  return hit ? linkHTML(hit.url,s,linkNote(hit),"idlink") : esc(s);
 }
-function renderObjLine(o){
+function renderObjLine(o,key){
   const t=o.title||o.name||null;
   if(t){ const bits=[]; for(const k of ["journal","venue","source","year","date"]) if(o[k]!=null) bits.push(esc(String(o[k])));
     return '<div class="pub">'+esc(String(t))+(bits.length?' <span class="j">— '+bits.join(", ")+'</span>':'')+'</div>'; }
-  return '<div class="pub">'+Object.entries(o).map(([k,val])=>esc(k)+": "+esc(typeof val==="object"?JSON.stringify(val):String(val))).join("; ")+'</div>';
+  return '<div class="pub">'+Object.entries(o).map(([k,val])=>esc(k)+": "+
+    (val!==null&&typeof val==="object"?esc(JSON.stringify(val)):renderScalar(val,k))).join("; ")+'</div>';
 }
 function scalarOptions(){ return state.scalarFields.map(k=>'<option value="'+esc(k)+'">'+esc(k)+'</option>').join(""); }
 function populateFieldSelects(){
@@ -501,12 +669,16 @@ function renderCards(){
   const sub=subtitleField();
   const full=state.viewMode==="full";
   $("#cards").innerHTML=state.pageItems.map((r,idx)=>{
-    const title=(r&&r[tf]!=null)?esc(String(r[tf])):'<span class="muted">(untitled)</span>';
+    const tv=r?r[tf]:undefined;
+    /* a heading that is itself an identifier becomes a link, keeping the heading's own color */
+    const th=(tv!=null&&typeof tv!=="object")?autoLinkFor(tv,tf):null;
+    const title=(tv==null)?'<span class="muted">(untitled)</span>'
+              : th?linkHTML(th.url,String(tv),linkNote(th),"idlink"):esc(String(tv));
     const subv=(sub&&sub!==tf&&r&&!isMissing(r[sub]))?'<span class="sub">'+esc(String(r[sub]))+'</span>':'';
     let kv='';
     for(const k of state.scalarFields){ if(k===tf||k===sub) continue;
       const v=r?r[k]:undefined; if(isMissing(v)) continue;   // hide empty scalar fields
-      kv+='<div class="kv"><span class="k">'+esc(k)+'</span><span class="v">'+renderValue(v)+'</span></div>'; }
+      kv+='<div class="kv"><span class="k">'+esc(k)+'</span><span class="v">'+renderValue(v,k)+'</span></div>'; }
     if(full) kv='<div class="kvwrap">'+kv+'</div>';
     let cf='';
     for(const k of state.complexFields){ const v=r?r[k]:null;
@@ -531,7 +703,7 @@ $("#cards").addEventListener("toggle",e=>{
   const d=e.target; if(!d.classList.contains("cf")||!d.open) return;
   const body=d.querySelector(".cf-body"); if(body.dataset.rendered==="1") return;
   body.dataset.rendered="1"; const r=state.pageItems[+d.dataset.idx];
-  body.innerHTML=renderValue(r?r[d.dataset.field]:null);
+  body.innerHTML=renderValue(r?r[d.dataset.field]:null, d.dataset.field);
 },true);
 
 $("#globalSearch").addEventListener("input",e=>{ state.search=e.target.value.trim().toLowerCase(); state.page=0; apply(); });
@@ -540,6 +712,7 @@ $("#recordArray").addEventListener("change",e=>setRecordSource(e.target.value,fa
 $("#titleField").addEventListener("change",e=>{ state.titleSel=e.target.value; renderCards(); syncURL(); });
 $("#subField").addEventListener("change",e=>{ state.subSel=e.target.value; renderCards(); syncURL(); });
 $("#viewMode").addEventListener("change",e=>{ state.viewMode=e.target.value; renderCards(); syncURL(); });
+$("#autoLink").addEventListener("change",e=>{ state.autoLink=e.target.value==="1"; renderMeta(); renderCards(); syncURL(); });
 $("#first").onclick=()=>{state.page=0;apply()};
 $("#prev").onclick=()=>{state.page--;apply()};
 $("#next").onclick=()=>{state.page++;apply()};

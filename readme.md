@@ -9,7 +9,9 @@ file you point it at.
 
 - **[JSON browser](json/readme.md)** (`json/json-browser.html`) — dependency-free
   JSON viewer with auto-faceted filters, global search, and shareable-URL state. It
-  auto-discovers the record array and fields and builds the filter UI on the fly.
+  auto-discovers the record array and fields and builds the filter UI on the fly,
+  and turns recognized identifiers (DOI, ORCID, OpenAlex, ROR, arXiv, RePEc, …)
+  into links to their canonical resolver.
   The bundled [`serve-json.sh`](json/serve-json.sh) helper serves the viewer with
   any JSON file (located anywhere on disk) and opens it in one command; you can also
   open the HTML directly via `file://`. See the
