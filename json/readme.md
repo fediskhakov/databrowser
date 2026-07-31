@@ -179,7 +179,7 @@ combines (AND) with the field filters and also drives the facet counts.
 | **Records per page** | `100` / `500` / `1000` / `all`. `all` hides the pager. |
 | **Card title field** | Which scalar field is the card heading. Defaults to the first of `name, title, display_name, label, id, uid`, else the first scalar field. |
 | **Card subtitle field** | Optional smaller heading next to the title; `(none)` by default. |
-| **Card image field** | Which column supplies the card thumbnail, when the dataset has [image columns](#image-fields). Defaults to the first one found; `(none)` shows no picture. |
+| **Card image field** | Which column supplies the card thumbnail. Offers every column holding [at least one picture](#choosing-which-column-is-the-thumbnail); defaults to the first that is *mostly* pictures, else `(none)`. |
 | **View** | `cards` (responsive grid) or `full-width records` (one record per row, wider key/value layout). |
 | **Auto-link IDs** | `on` (default) / `off`. Turns recognized identifiers into links to their canonical resolver — see [Identifier auto-linking](#identifier-auto-linking). |
 
@@ -312,11 +312,9 @@ its top and loses its bottom, so faces, logos and headers survive instead of bei
 sliced through the middle. Wide images are unaffected vertically — there is nothing
 to choose — and are still cropped evenly left and right.
 
-### What counts as an image field
+### What counts as a picture
 
-Detection is per column, not per value, so a dataset either shows pictures for a
-field or it doesn't — never a ragged mix. A scalar field qualifies when **at least
-90% of its distinct values** are image URLs, meaning either:
+A value is a picture when it is:
 
 - an `http(s)` (or protocol-relative) URL whose path ends in `.jpg`, `.jpeg`,
   `.png`, `.gif`, `.webp`, `.avif`, `.svg`, `.bmp`, `.ico`, `.tif`, or `.tiff` —
@@ -328,21 +326,33 @@ field or it doesn't — never a ragged mix. A scalar field qualifies when **at l
   services serve pictures from extensionless URLs, and the field name is the only
   hint available for those.
 
-A record whose value is missing simply gets no thumbnail, and a URL that fails to
+A record whose value is missing — or whose value in that column simply isn't a
+picture — gets no thumbnail and keeps its ordinary row, and a URL that fails to
 load collapses its box rather than leaving a broken-image icon.
 
 ### Choosing which column is the thumbnail
 
 A dataset can hold several image columns — a portrait *and* a logo, say. Only one
 becomes the card image; the **Card image field** select in the Display options
-decides which. It is offered `(none)` plus every qualifying column, and starts on
-the first one found in the records. The **Metadata & dataset info** panel lists
-them all and marks the choice: `image fields   portrait (card image), logo`.
+decides which. Two different bars apply, because offering a choice and making one
+for you deserve different caution:
 
-Every *other* image column renders as a **show image** link that opens the picture
-in a new tab — the same thing clicking the thumbnail does. So switching the select
-from `portrait` to `logo` swaps which one is the picture and which is the link;
-`(none)` turns both into links and leaves the cards text-only.
+- **offered in the select** — the column holds *at least one* picture. A single
+  photographed record among hundreds of text-only ones is enough, so you can always
+  reach the images a dataset happens to contain.
+- **chosen automatically** — at least 90% of the column is pictures. A stray image
+  URL in a column of notes must never hijack every card, so the default stays
+  conservative; if nothing clears this bar the select starts on `(none)` and the
+  metadata panel says *pick one under Display*.
+
+The **Metadata & dataset info** panel lists every column on offer and marks the
+current one: `image fields   portrait (card image), logo, scan`.
+
+Every *other* picture — in another column, or in the same column on a record whose
+value is a picture the chosen column didn't claim — renders as a **show image** link
+that opens it in a new tab, the same thing clicking the thumbnail does. So switching
+the select from `portrait` to `logo` swaps which one is the picture and which is the
+link; `(none)` turns both into links and leaves the cards text-only.
 
 Image URLs never show their address, however short, since the address is not the
 information. That also keeps embedded `data:` images readable: they render as
@@ -364,7 +374,8 @@ field off stops them entirely. `data:` URIs never touch the network.
 `image-test.json` is a fixture for this rule: the `portrait` column has two inline
 `data:` SVGs that render offline — one landscape, one twice as tall as it is wide
 so the top-anchored crop is visible — two remote URLs, and one record with no
-value; a second column, `logo`, exercises the picker.
+value. A second column, `logo`, exercises the picker, and a third, `scan`, holds a
+single picture among four text values: offered in the select, never chosen for you.
 
 ---
 
@@ -544,5 +555,6 @@ missing.
 - `link-test.json` — fixture for [identifier auto-linking](#identifier-auto-linking):
   every recognized scheme plus the near-misses that must stay plain text.
 - `image-test.json` — fixture for [image fields](#image-fields): inline `data:` SVGs
-  (landscape and portrait, to check the crop), remote URLs, and a record with no picture.
+  (landscape and portrait, to check the crop), remote URLs, a record with no picture,
+  and a column holding just one picture among text.
 - `readme.md` — this document.

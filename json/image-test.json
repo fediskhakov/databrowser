@@ -1,6 +1,6 @@
 {
   "description": "Fixture for the image-field rule in json-browser.html. `portrait` must become a square thumbnail on every card; `homepage` must stay a text link. Record 2's source image is twice as tall as it is wide: the crop is anchored to the top, so the teal 'head' half shows and the red 'CUT' half must not appear at all. A second image column, `logo`, exercises the Card image field picker: only the selected column becomes a thumbnail, the other shows as a 'show image' link.",
-  "expect_image_field": "portrait and logo both qualify; portrait is the default card image",
+  "expect_image_field": "portrait and logo qualify automatically; scan holds a single image among text, so it is offered in the picker but never chosen on its own",
   "expect_not_image_field": "homepage (plain URLs in a field not named like a picture), role, rank, name",
   "records": [
     {
@@ -9,7 +9,8 @@
       "role": "embedded SVG 120x80",
       "homepage": "https://example.org/alpha",
       "rank": 1,
-      "logo": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA4MCA4MCI+PHJlY3Qgd2lkdGg9IjgwIiBoZWlnaHQ9IjgwIiBmaWxsPSIjN2MzYWVkIi8+PHRleHQgeD0iNDAiIHk9IjQ1IiBmb250LWZhbWlseT0iSGVsdmV0aWNhIiBmb250LXNpemU9IjEzIiBmaWxsPSIjZmZmIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5sb2dvIEE8L3RleHQ+PC9zdmc+"
+      "logo": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA4MCA4MCI+PHJlY3Qgd2lkdGg9IjgwIiBoZWlnaHQ9IjgwIiBmaWxsPSIjN2MzYWVkIi8+PHRleHQgeD0iNDAiIHk9IjQ1IiBmb250LWZhbWlseT0iSGVsdmV0aWNhIiBmb250LXNpemU9IjEzIiBmaWxsPSIjZmZmIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5sb2dvIEE8L3RleHQ+PC9zdmc+",
+      "scan": "no picture in this row"
     },
     {
       "name": "2 \u2014 portrait data: URI (keeps the top half)",
@@ -17,7 +18,8 @@
       "role": "embedded SVG 80x160",
       "homepage": "https://example.org/beta",
       "rank": 2,
-      "logo": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA4MCA4MCI+PHJlY3Qgd2lkdGg9IjgwIiBoZWlnaHQ9IjgwIiBmaWxsPSIjYzI0MTBjIi8+PHRleHQgeD0iNDAiIHk9IjQ1IiBmb250LWZhbWlseT0iSGVsdmV0aWNhIiBmb250LXNpemU9IjEzIiBmaWxsPSIjZmZmIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5sb2dvIEI8L3RleHQ+PC9zdmc+"
+      "logo": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA4MCA4MCI+PHJlY3Qgd2lkdGg9IjgwIiBoZWlnaHQ9IjgwIiBmaWxsPSIjYzI0MTBjIi8+PHRleHQgeD0iNDAiIHk9IjQ1IiBmb250LWZhbWlseT0iSGVsdmV0aWNhIiBmb250LXNpemU9IjEzIiBmaWxsPSIjZmZmIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5sb2dvIEI8L3RleHQ+PC9zdmc+",
+      "scan": "https://example.org/scans/only-one.jpg"
     },
     {
       "name": "3 \u2014 remote .jpg (will not load offline)",
@@ -25,7 +27,8 @@
       "role": "remote by extension",
       "homepage": "https://example.org/gamma",
       "rank": 3,
-      "logo": "https://example.org/brand/gamma-logo.svg"
+      "logo": "https://example.org/brand/gamma-logo.svg",
+      "scan": "still just text"
     },
     {
       "name": "4 \u2014 remote .png with a query string",
@@ -33,13 +36,15 @@
       "role": "remote by extension",
       "homepage": "https://example.org/delta",
       "rank": 4,
-      "logo": "https://example.org/brand/delta-logo.png"
+      "logo": "https://example.org/brand/delta-logo.png",
+      "scan": "text again"
     },
     {
       "name": "5 \u2014 no picture for this record",
       "role": "missing value",
       "homepage": "https://example.org/epsilon",
-      "rank": 5
+      "rank": 5,
+      "scan": "and text here"
     }
   ]
 }

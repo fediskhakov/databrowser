@@ -223,7 +223,7 @@ const state = {
   titleSel:null, subSel:null, viewMode:"cards",
   hidden:new Set(),      // fields switched off in the metadata panel (display only)
   autoLink:true, linkPlan:{}, linkFields:{},   // identifier auto-linking (presentational only)
-  imageFields:[], imageSel:null,               // columns that hold images; which one is the thumbnail
+  imageFields:[], imageAuto:null, imageSel:null,   // columns holding images; the safe default; the pick
   filtered:[], pageItems:[], restoring:false
 };
 
@@ -374,28 +374,40 @@ function isImageURL(s){
   if(/^data:image\//i.test(v)) return true;
   return isURL(v) && IMG_EXT.test(v);
 }
-/* Every field where ~all values are image URLs. A field named like a picture
-   (photo, avatar, logo, …) also qualifies on plain URLs, since plenty of image
-   services serve them without a file extension. The first one is the card image
-   by default; the rest are offered in the Card image field select. */
+/* Is THIS value a picture, in a field of this name? Columns named like a picture
+   (avatar, logo, …) count plain URLs; elsewhere the extension has to say so. */
+function isImageValue(v,key){
+  const s=String(v).trim();
+  return isImageURL(s) || (key!=null && IMG_NAME.test(normKey(key)) && isURL(s));
+}
+/* Two bars, because choosing and guessing want different strictness:
+     offered  — the column holds at least one image, so it is worth offering in the
+                Card image field select. One picture in one record is enough.
+     auto     — ~all of the column is images, so it is safe to pick on its own. A
+                stray image URL in a column of notes must not hijack the cards.
+   A field named like a picture (photo, avatar, logo, …) also counts plain URLs,
+   since plenty of image services serve them without a file extension. */
 function detectImageFields(){
-  state.imageFields=[];
-  const CAP=200;
+  state.imageFields=[]; state.imageAuto=null;
+  const CAP=200;                       // the ratio is judged on a sample; "any" is not
   for(const k of state.scalarFields){
-    const vals=[];
-    for(const v of state.values[k].keys()){ vals.push(v); if(vals.length>=CAP) break; }
-    if(!vals.length) continue;
-    const named=IMG_NAME.test(normKey(k));
-    let n=0;
-    for(const v of vals) if(isImageURL(v)||(named&&isURL(v))) n++;
-    if(n>=Math.ceil(vals.length*0.9)) state.imageFields.push(k);
+    let seen=0, hits=0, any=false;
+    for(const v of state.values[k].keys()){
+      const hit=isImageValue(v,k);
+      if(hit) any=true;
+      if(seen<CAP){ seen++; if(hit) hits++; }
+      else if(any) break;              // past the sample, only the first picture matters
+    }
+    if(!any) continue;
+    state.imageFields.push(k);
+    if(!state.imageAuto && hits>=Math.ceil(seen*0.9)) state.imageAuto=k;
   }
 }
-/* null when the user chose "(none)", or when the file has no image column */
+/* null when the user chose "(none)", or when nothing was safe to pick on its own */
 function imageField(){
   if(state.imageSel!==null)
     return (state.imageSel===""||!state.imageFields.includes(state.imageSel)) ? null : state.imageSel;
-  return state.imageFields[0]||null;
+  return state.imageAuto;
 }
 function imageHTML(src,alt){
   const u=esc(String(src));
@@ -523,7 +535,7 @@ function imageNote(){                      // which column is the thumbnail, and
   const sel=imageField();
   return state.imageFields.map(k=>esc(k)+(k!==sel ? "" :
       state.hidden.has(k) ? "  (card image — switched off)" : "  (card image)")).join(", ")
-    + (sel ? "" : "   — no card image; the rest show as “show image” links");
+    + (sel ? "" : "   — no card image; pick one under Display");
 }
 /* One checkbox per field: unchecking hides it from the records, nothing else.
    The title/subtitle fields are shown in the card heading, so their boxes are
@@ -823,8 +835,13 @@ function renderCards(){
     const title=(tv==null)?'<span class="muted">(untitled)</span>'
               : th?linkHTML(th.url,String(tv),linkNote(th),"vlink"):esc(String(tv));
     const subv=(sub&&sub!==tf&&r&&!isMissing(r[sub]))?'<span class="sub">'+esc(String(r[sub]))+'</span>':'';
+    /* only a value that really is a picture becomes the thumbnail; anything else in
+       that column stays an ordinary row rather than a broken image */
+    const iv=imgF&&r?r[imgF]:undefined;
+    const asImg=!isMissing(iv)&&typeof iv!=="object"&&isImageValue(iv,imgF);
     let kv='';
-    for(const k of state.scalarFields){ if(k===tf||k===sub||k===imgF||state.hidden.has(k)) continue;
+    for(const k of state.scalarFields){ if(k===tf||k===sub||state.hidden.has(k)) continue;
+      if(k===imgF&&asImg) continue;                          // shown as the thumbnail instead
       const v=r?r[k]:undefined; if(isMissing(v)) continue;   // hide empty scalar fields
       kv+='<div class="kv"><span class="k">'+esc(k)+'</span><span class="v">'+renderValue(v,k)+'</span></div>'; }
     if(full) kv='<div class="kvwrap">'+kv+'</div>';
@@ -835,8 +852,7 @@ function renderCards(){
       cf+='<details class="cf" data-idx="'+idx+'" data-field="'+esc(k)+'">'+
           '<summary title="double-click to open this field on every card">'+esc(k)+' ('+n+')</summary>'+
           '<div class="cf-body" data-rendered="0"></div></details>'; }
-    const iv=imgF&&r?r[imgF]:undefined;
-    const img=(!isMissing(iv)&&typeof iv!=="object")?imageHTML(iv,tv==null?"":String(tv)):"";
+    const img=asImg?imageHTML(iv,tv==null?"":String(tv)):"";
     const head='<h3>'+title+' '+subv+'</h3>';
     /* the picture shares the top line with the heading; everything below is full width */
     return img ? '<div class="card has-img"><div class="cardhead">'+head+img+'</div>'+kv+cf+'</div>'
