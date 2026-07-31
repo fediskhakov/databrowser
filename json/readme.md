@@ -119,14 +119,61 @@ fields are shown as collapsible expanders on each card, not as filters.
 - **Header:** title, current filename, a full-width **search** box, the live
   matched-record count, and pagination (`«` first, `‹` prev, page info, `›` next,
   `»` last). The pager is hidden when *Records per page* is `all`.
-- **Left sidebar:** **Reset filters** / **Collapse all** actions, the **Filters**
-  list (one collapsible panel per scalar field), and at the bottom the **Display**
-  options.
+- **Left sidebar:** three sections — **Sort** (one dropdown), **Filters** (its
+  **Reset filters** / **Collapse all** buttons, then one collapsible panel per
+  scalar field), and **Display** options at the bottom.
 - **Main area:** a collapsed **Metadata & dataset info** panel — the data source
   controls, the record-array choice, the field on/off switches, the record count,
   and any non-record top-level keys from the file — then the records as cards.
   Nested fields on a card open with a click, or on every card at once with a
   [double-click](#how-records-render).
+
+---
+
+## Sorting
+
+The **Sort** dropdown at the top of the sidebar orders the records by any one field
+that is switched on. Every field is listed **twice** — `world_rank ▲` sorts
+ascending, `world_rank ▼` descending — so either direction is one choice away.
+`(file order)`, the default, leaves the records as they appear in the file.
+
+Values sort by what they are, not by how they print: numbers — and strings that are
+numbers — compare numerically, so `9` comes before `10`; text compares
+case-insensitively with embedded digits still ordered numerically (`item2` before
+`item10`); booleans put `false` first. Records that tie keep their file order.
+
+Records **missing** the field sort last in **both** directions — reversing the data
+shouldn't dredge the empty rows to the top.
+
+### Sorting people by surname
+
+A field called exactly **`name`** (any capitalization, stray spaces tolerated — but
+not `full_name` or `surname`) gets **two extra options**, `name (last word) ▲` and
+`name (last word) ▼`, which order by the **last word** of the value. On a list of
+people that is the surname:
+
+| by whole name | by last word |
+|---|---|
+| Ada Lovelace, Alan Turing, Ann Smith, Grace Hopper, John Smith, John von Neumann, Madonna | Grace **Hopper**, Ada **Lovelace**, **Madonna**, John von **Neumann**, Ann **Smith**, John **Smith**, Alan **Turing** |
+
+A one-word name sorts on itself, and a multi-part surname sorts on its last word
+(`von Neumann` under N). Values with the same last word fall back to the whole
+name, so the Smiths land together *and* in order. The mode is part of the URL
+(`last=1`); on any other field the flag is ignored rather than obeyed.
+
+To recognize a differently-named column, widen the one-line `NAME_FIELD` regex near
+the top of the script.
+
+The whole result is sorted, not just the page you are looking at, and the
+underlying data is never reordered — going back to `(file order)` restores it
+exactly. Sorting is independent of filtering: it re-applies to whatever the filters
+and search currently match.
+
+Switching the sort field off in the [metadata panel](#switching-fields-on-and-off)
+**suspends** the sort the same way it suspends that field's filter — the records
+return to file order and the dropdown shows `(file order)` — and switching the
+field back on resumes it, direction included. The choice travels in the URL as
+`sort=<field>`, plus `desc=1` when descending.
 
 ---
 
@@ -492,6 +539,9 @@ short):
 | `file` | Path or URL of the JSON to load |
 | `rec` | Record-array key (only emitted when the file has more than one array) |
 | `q` | Global search string |
+| `sort` | Field to sort records by |
+| `desc` | `1` for descending (omitted when ascending) |
+| `last` | `1` to sort a `name` field by its [last word](#sorting-people-by-surname) |
 | `ps` | Records per page (`100`/`500`/`1000`/`all`); omitted when `100` |
 | `view` | `full` for full-width records (omitted for the default `cards`) |
 | `links` | `0` disables identifier auto-linking (omitted when on, the default) |
@@ -557,4 +607,7 @@ missing.
 - `image-test.json` — fixture for [image fields](#image-fields): inline `data:` SVGs
   (landscape and portrait, to check the crop), remote URLs, a record with no picture,
   and a column holding just one picture among text.
+- `sort-test.json` — fixture for [sorting](#sorting): people whose surnames, one-word
+  names, multi-part surnames and shared last names exercise the `name` rule, plus a
+  record with no name at all.
 - `readme.md` — this document.

@@ -1,0 +1,16 @@
+{
+  "description": "Fixture for sorting in json-browser.html. The `name` column triggers the special last-word options, so `name (last word) ▲` orders by surname: Hopper, Lovelace, Madonna, von Neumann, Smith (Ann), Smith (John), Turing, then the record with no name.",
+  "expect_name_last_word": "Grace Hopper, Ada Lovelace, Madonna, John von Neumann, Ann Smith, John Smith, Alan Turing, (missing)",
+  "expect_ties": "Ann Smith before John Smith — equal last words fall back to the whole name",
+  "expect_missing": "the nameless record sorts last in both directions",
+  "records": [
+    {"name": "Alan Turing",       "born": 1912, "field": "computing",   "score": 9.5},
+    {"name": "Ada Lovelace",      "born": 1815, "field": "computing",   "score": 10},
+    {"name": "John Smith",        "born": 1970, "field": "economics",   "score": 2.25},
+    {"name": "Grace Hopper",      "born": 1906, "field": "computing",   "score": 9},
+    {"name": "John von Neumann",  "born": 1903, "field": "mathematics", "score": 10.5},
+    {"name": "Madonna",           "born": 1958, "field": "music",       "score": 7},
+    {"name": "Ann Smith",         "born": 1981, "field": "economics",   "score": 2.5},
+    {"born": 1900, "field": "unknown", "score": 1}
+  ]
+}

@@ -72,6 +72,8 @@
   .vrow .vc{color:var(--muted);font-size:12px;flex:none}
   .mini{font-size:12px;padding:2px 6px}
   .side .actions{display:flex;gap:6px;margin:4px 4px 6px}
+  .sortbox{margin:0 4px 2px}
+  .sortbox select{width:100%}
   /* options block */
   .opts{display:flex;flex-direction:column;gap:8px;border:1px solid var(--line);border-radius:8px;padding:9px;background:#fff}
   .opts label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted)}
@@ -145,11 +147,14 @@
   </header>
 
   <aside class="side">
+    <h2>Sort</h2>
+    <div class="sortbox"><select id="sortField"></select></div>
+
+    <h2>Filters <span class="muted" id="filterHint"></span></h2>
     <div class="actions">
       <button class="mini" id="resetFilters">Reset filters</button>
       <button class="mini" id="collapseAll">Collapse all</button>
     </div>
-    <h2>Filters <span class="muted" id="filterHint"></span></h2>
     <div id="filters"></div>
 
     <div class="spacer"></div>
@@ -219,7 +224,7 @@ const state = {
   values:{}, missCount:{}, presCount:{},
   facetVal:{}, facetMiss:{}, facetPres:{},   // live, recomputed each apply()
   filters:{},            // field -> {vals:Set, missing:bool, present:bool}
-  search:"", pageSize:100, page:0,
+  search:"", pageSize:100, page:0, sortField:"", sortDesc:false, sortLast:false,
   titleSel:null, subSel:null, viewMode:"cards",
   hidden:new Set(),      // fields switched off in the metadata panel (display only)
   autoLink:true, linkPlan:{}, linkFields:{},   // identifier auto-linking (presentational only)
@@ -504,6 +509,7 @@ function setRecordSource(key, keepSearch){
   state.meta=metaFor(state.raw,key);
   analyze();
   state.titleSel=null; state.subSel=null; state.imageSel=null;
+  state.sortField=""; state.sortDesc=false; state.sortLast=false;
   state.hidden.clear();                                           // field names differ per array
   state.page=0; if(!keepSearch){ state.search=""; $("#globalSearch").value=""; }
   populateFieldSelects();
@@ -564,12 +570,13 @@ function renderFilters(){
       '<summary><span>'+esc(k)+'</span><span class="n">'+state.values[k].size+'</span></summary>'+
       '<div class="fbody" data-rendered="0"></div>'+
     '</details>').join("");
-  syncFilterVisibility();
+  syncFieldUI();
 }
-/* A field switched off in the metadata panel loses its filter panel here. The
-   panel is only display:none — its open state, rendered body and selected values
-   survive, so switching the field back on restores the filter as it was. */
-function syncFilterVisibility(){
+/* Everything in the sidebar that depends on which fields are switched on. A field
+   switched off in the metadata panel loses its filter panel and drops out of the
+   sort list. The panel is only display:none — its open state, rendered body and
+   selected values survive, so switching the field back on restores it as it was. */
+function syncFieldUI(){
   let shown=0;
   document.querySelectorAll(".ffield").forEach(det=>{
     const off=state.hidden.has(det.dataset.field);
@@ -578,6 +585,27 @@ function syncFilterVisibility(){
   });
   const tot=state.scalarFields.length;
   $("#filterHint").textContent="("+(shown<tot?shown+" of "+tot:tot)+" fields)";
+  /* Each field twice: ▲ ascending, ▼ descending. The direction rides on a data
+     attribute rather than inside the value, so field names needing no escaping
+     stay the option's value whatever characters they contain. */
+  const s=$("#sortField");
+  s.innerHTML='<option value="">(file order)</option>'+
+    state.scalarFields.filter(k=>!state.hidden.has(k)).map(k=>{
+      const o='<option value="'+esc(k)+'"';
+      return o+'>'+esc(k)+' ▲</option>'+
+             o+' data-desc="1">'+esc(k)+' ▼</option>'+
+        (isNameField(k) ?                            // surname ordering, for a list of people
+             o+' data-last="1">'+esc(k)+' (last word) ▲</option>'+
+             o+' data-last="1" data-desc="1">'+esc(k)+' (last word) ▼</option>' : "");
+    }).join("");
+  const sk=sortBy();             // a suspended sort shows as (file order) until its field is back
+  s.selectedIndex=0;
+  if(sk){
+    const i=[...s.options].findIndex(o=>o.value===sk
+      && (o.dataset.desc==="1")===state.sortDesc
+      && (o.dataset.last==="1")===sortLastWord());
+    if(i>=0) s.selectedIndex=i;
+  }
 }
 function renderFieldBody(det){
   const k=det.dataset.field, body=det.querySelector(".fbody");
@@ -698,8 +726,45 @@ function computeFacets(){
   state.facetVal=fv; state.facetMiss=fm; state.facetPres=fp;
 }
 function fcount(map,k){ return (state[map]&&state[map][k])||(map==="facetVal"?new Map():0); }
+
+/* ---------- sorting ---------- */
+/* A field actually called "name" gets two extra options that order by the LAST
+   word of the value — surnames, for a list of people. Widen this regex if your
+   data calls the column something else. */
+const NAME_FIELD=/^_*name_*$/;      // "name", "Name", " name " — but not full_name or surname
+const isNameField = k => NAME_FIELD.test(normKey(k));
+const lastWord = v => { const p=String(v).trim().split(/\s+/); return p[p.length-1]; };
+
+/* Suspended while its field is switched off, exactly like that field's filter. */
+function sortBy(){
+  const k=state.sortField;
+  return k && state.scalarFields.includes(k) && !state.hidden.has(k) ? k : null;
+}
+function sortLastWord(){ const k=sortBy(); return !!(k && state.sortLast && isNameField(k)); }
+/* Ascending. Numbers — and strings that are numbers — compare numerically, so 9
+   comes before 10; everything else compares as text, case- and accent-insensitively,
+   with embedded digits still ordered numerically. Missing values never reach here. */
+function cmpVals(a,b){
+  if(typeof a==="boolean"||typeof b==="boolean") return (a?1:0)-(b?1:0);
+  const na=+a, nb=+b;
+  if(!isNaN(na)&&!isNaN(nb)&&String(a).trim()!==""&&String(b).trim()!=="") return na-nb;
+  return String(a).localeCompare(String(b),undefined,{sensitivity:"base",numeric:true});
+}
+/* Records missing the field stay last in BOTH directions — flipping the order of
+   the data shouldn't dredge the empty rows to the top. Ties return 0, so a stable
+   sort keeps them in file order whichever way round. */
+function cmpRecords(x,y,k,desc,last){
+  const a=x?x[k]:undefined, b=y?y[k]:undefined;
+  const ma=isMissing(a), mb=isMissing(b);
+  if(ma||mb) return ma&&mb ? 0 : (ma?1:-1);
+  /* by last word, then by the whole value, so the Smiths land together and in order */
+  const c=last ? (cmpVals(lastWord(a),lastWord(b)) || cmpVals(a,b)) : cmpVals(a,b);
+  return desc ? -c : c;
+}
 function apply(){
   state.filtered=state.records.filter(recordMatches);
+  const sk=sortBy();      // sort the whole result, not just the page; Array#sort is stable
+  if(sk) state.filtered.sort((x,y)=>cmpRecords(x,y,sk,state.sortDesc,sortLastWord()));
   computeFacets();
   refreshFacetUI();
   $("#resCount").textContent=state.filtered.length.toLocaleString();
@@ -722,6 +787,9 @@ function syncURL(){
   if(state.fileName) p.set("file", state.fileName);
   if(state.recordKey && arrayCandidates(state.raw).length>1) p.set("rec", state.recordKey);
   if(state.search) p.set("q", state.search);
+  if(state.sortField){ p.set("sort", state.sortField);
+    if(state.sortDesc) p.set("desc","1");
+    if(state.sortLast) p.set("last","1"); }
   if(state.pageSize!==100) p.set("ps", String(state.pageSize));
   if(state.viewMode!=="cards") p.set("view", state.viewMode);
   if(!state.autoLink) p.set("links","0");
@@ -752,6 +820,9 @@ function restoreFromParams(params){
   const im=params.get("img");
   if(im!==null){ state.imageSel = im==="__none__"?"":im; $("#imageField").value=state.imageSel; }
   const q=params.get("q"); if(q){ state.search=q; $("#globalSearch").value=q; }
+  const so=params.get("sort");                              // syncFieldUI() below sets the select
+  if(so){ state.sortField=so; state.sortDesc=params.get("desc")==="1";
+          state.sortLast=params.get("last")==="1"; }
   for(const [key,val] of params){
     if(key.startsWith("f.")){ const f=state.filters[key.slice(2)]; if(f) f.vals.add(val); }
     else if(key.startsWith("p.")){ const f=state.filters[key.slice(2)]; if(f) f.present=true; }
@@ -759,7 +830,7 @@ function restoreFromParams(params){
     else if(key.startsWith("h.")){ const k=key.slice(2); if(state.fields.includes(k)) state.hidden.add(k); }
   }
   renderMeta();                 // reflect restored field switches / auto-link note
-  syncFilterVisibility();       // and drop the filter panels of switched-off fields
+  syncFieldUI();                // and the sidebar's field-dependent controls
   const pg=params.get("page"); if(pg){ state.page=Math.max(0,(+pg||1)-1); }
   document.querySelectorAll(".ffield").forEach(d=>{
     const f=state.filters[d.dataset.field];
@@ -899,7 +970,7 @@ $("#metaBody").addEventListener("change",e=>{
   chip.title=chip.classList.contains("susp")?"its filter is suspended while the field is off":"";
   const n=$("#hidNote"); if(n) n.textContent=hiddenNote();
   const im=$("#imgNote"); if(im) im.innerHTML=imageNote();   // imageNote() escapes its parts
-  syncFilterVisibility(); apply();      // a suspended filter changes what matches
+  syncFieldUI(); apply();      // a suspended filter changes what matches
 });
 $("#metaBody").addEventListener("click",e=>{
   const b=e.target.closest("button[data-tog]"); if(!b) return;
@@ -907,15 +978,22 @@ $("#metaBody").addEventListener("click",e=>{
   const tf=titleField(), sub=subtitleField();
   for(const k of list){ if(k===tf||k===sub) continue;
     if(b.dataset.tog==="all") state.hidden.delete(k); else state.hidden.add(k); }
-  renderMeta(); syncFilterVisibility(); apply();
+  renderMeta(); syncFieldUI(); apply();
 });
 
+$("#sortField").addEventListener("change",e=>{
+  const o=e.target.selectedOptions[0];
+  state.sortField=o?o.value:"";
+  state.sortDesc=!!(o&&o.dataset.desc==="1");
+  state.sortLast=!!(o&&o.dataset.last==="1");
+  state.page=0; apply();
+});
 $("#globalSearch").addEventListener("input",e=>{ state.search=e.target.value.trim().toLowerCase(); state.page=0; apply(); });
 $("#pageSize").addEventListener("change",e=>{ state.pageSize=e.target.value==="all"?"all":+e.target.value; state.page=0; apply(); });
 $("#recordArray").addEventListener("change",e=>setRecordSource(e.target.value,false));
 /* a field promoted to the heading or the card image stops being hidden — the two
    would contradict — which can also bring its filter panel back, hence apply() */
-function pickField(sel,val){ state[sel]=val; state.hidden.delete(val); renderMeta(); syncFilterVisibility(); apply(); }
+function pickField(sel,val){ state[sel]=val; state.hidden.delete(val); renderMeta(); syncFieldUI(); apply(); }
 $("#titleField").addEventListener("change",e=>pickField("titleSel",e.target.value));
 $("#subField").addEventListener("change",e=>pickField("subSel",e.target.value));
 $("#imageField").addEventListener("change",e=>pickField("imageSel",e.target.value));
