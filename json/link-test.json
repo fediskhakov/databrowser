@@ -82,7 +82,14 @@
       ],
       "paper_pdf": "https://example.org/wp/w12345.pdf#page=3",
       "replication": "https://example.org/files/tables-and-figures.xlsx?v=2",
-      "landing": "https://example.org/authors/j-carberry/profile.php?id=42"
+      "landing": "https://example.org/authors/j-carberry/profile.php?id=42",
+      "refs": [
+        {
+          "doi": "10.1093/restud/rdz002",
+          "openalex_id": "W2963891832",
+          "year": 2019
+        }
+      ]
     },
     {
       "name": "3 \u2014 library and authority IDs",
@@ -103,7 +110,26 @@
       "almost_id": "S137773608",
       "paper_pdf": "https://example.org/dl?year=2020&file=appendix.pdf",
       "replication": "https://example.org/archive/survey-responses.csv",
-      "landing": "https://example.org/pdf/collection/browse"
+      "landing": "https://example.org/pdf/collection/browse",
+      "refs": [
+        {
+          "doi": "10.1111/ecta.12345",
+          "openalex_id": "W2118543209",
+          "year": 2016
+        },
+        {
+          "doi": "10.1257/mac.20180138",
+          "openalex_id": "W3011234567",
+          "year": 2021
+        }
+      ],
+      "works": [
+        {
+          "title": "A third publication line",
+          "journal": "Review of Examples",
+          "year": 2022
+        }
+      ]
     },
     {
       "name": "4 \u2014 awkward but valid values",
@@ -121,7 +147,14 @@
       "note": "not a DOI: 10.foo/bar",
       "internal_id": "WWWWWWWW",
       "mixed_id": "still text",
-      "almost_id": "I136199984"
+      "almost_id": "I136199984",
+      "refs": [
+        {
+          "doi": "10.1086/700894",
+          "openalex_id": "W2810945611",
+          "year": 2018
+        }
+      ]
     },
     {
       "name": "5 \u2014 negatives only",
@@ -143,5 +176,6 @@
       "almost_id": "definitely not an id"
     }
   ],
-  "expect_url_labels": "paper_pdf -> 'download pdf'; replication -> 'download'; landing -> 'open landing' (no file extension, so it is a page)"
+  "expect_url_labels": "paper_pdf -> 'download pdf'; replication -> 'download'; landing -> 'open landing' (no file extension, so it is a page)",
+  "expect_nested": "refs on records 1-4 and works on records 2-3: double-clicking one field's triangle opens that field on every card, leaving the other field alone"
 }

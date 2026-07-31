@@ -112,7 +112,7 @@
   .card h3 a.vlink{color:inherit}          /* a linked heading still reads as a heading */
   .bool{font-weight:600}.b-true{color:var(--ok)}.b-false{color:var(--no)}
   details.cf{margin:3px 0;border-top:1px solid #f1f3f5;padding-top:3px}
-  details.cf>summary{cursor:pointer;color:var(--accent);font-size:12px}
+  details.cf>summary{cursor:pointer;color:var(--accent);font-size:12px;user-select:none}
   .cf-body{padding:6px 0 2px}
   .pub{padding:3px 0;border-bottom:1px dashed #eceef1;font-size:13px}
   .pub:last-child{border-bottom:none}
@@ -832,7 +832,9 @@ function renderCards(){
     for(const k of state.complexFields){ if(state.hidden.has(k)) continue; const v=r?r[k]:null;
       const n=Array.isArray(v)?v.length:(v&&typeof v==="object"?Object.keys(v).length:0);
       if(v==null||n===0) continue;   // skip empty non-scalar fields
-      cf+='<details class="cf" data-idx="'+idx+'" data-field="'+esc(k)+'"><summary>'+esc(k)+' ('+n+')</summary><div class="cf-body" data-rendered="0"></div></details>'; }
+      cf+='<details class="cf" data-idx="'+idx+'" data-field="'+esc(k)+'">'+
+          '<summary title="double-click to open this field on every card">'+esc(k)+' ('+n+')</summary>'+
+          '<div class="cf-body" data-rendered="0"></div></details>'; }
     const iv=imgF&&r?r[imgF]:undefined;
     const img=(!isMissing(iv)&&typeof iv!=="object")?imageHTML(iv,tv==null?"":String(tv)):"";
     const head='<h3>'+title+' '+subv+'</h3>';
@@ -858,6 +860,18 @@ $("#cards").addEventListener("toggle",e=>{
   body.dataset.rendered="1"; const r=state.pageItems[+d.dataset.idx];
   body.innerHTML=renderValue(r?r[d.dataset.field]:null, d.dataset.field);
 },true);
+/* Double-click a nested field's triangle to open that field on every card of the
+   page at once — and again to close them. The two clicks of the double-click
+   cancel each other out on the one you hit, so counting here sees the state you
+   started from. Bodies still render lazily: setting .open fires toggle. */
+$("#cards").addEventListener("dblclick",e=>{
+  const sum=e.target.closest("summary"); if(!sum) return;
+  const d=sum.parentNode; if(!d.classList||!d.classList.contains("cf")) return;
+  const f=d.dataset.field;
+  const peers=[...$("#cards").querySelectorAll("details.cf")].filter(x=>x.dataset.field===f);
+  const openAll=!peers.every(x=>x.open);        // all open already -> close them instead
+  peers.forEach(x=>{ x.open=openAll; });
+});
 
 /* field on/off toggles — delegated, so renderMeta() can rebuild the rows freely */
 $("#metaBody").addEventListener("change",e=>{

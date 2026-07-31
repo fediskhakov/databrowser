@@ -125,6 +125,8 @@ fields are shown as collapsible expanders on each card, not as filters.
 - **Main area:** a collapsed **Metadata & dataset info** panel — the data source
   controls, the record-array choice, the field on/off switches, the record count,
   and any non-record top-level keys from the file — then the records as cards.
+  Nested fields on a card open with a click, or on every card at once with a
+  [double-click](#how-records-render).
 
 ---
 
@@ -258,6 +260,13 @@ the search but not the field switches — use **all** to bring every field back.
     appended (nice for publication lists), otherwise as `key: value; …`;
   - an **array of scalars** renders as chips;
   - an **object** renders as nested key/value rows.
+
+  **Double-click an expander** to open that field on *every* card of the page at
+  once, instead of clicking through them one at a time; double-click again to
+  close them all. Only the field you clicked is affected — other nested fields keep
+  their own state — and the bodies still render lazily, so nothing is built for
+  fields you never open. Paging or changing a filter re-renders the cards and
+  returns every expander to closed.
 - **Values** are formatted by type: booleans get a true/false pill, strings that
   start with `http(s)://` become clickable links (open in a new tab), `null`/empty
   shows as an em dash, and recognized identifiers (DOI, ORCID, …) become links to
