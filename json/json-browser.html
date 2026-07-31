@@ -82,6 +82,18 @@
   .grid.full{grid-template-columns:1fr}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:12px 13px;
         box-shadow:0 1px 2px rgba(16,24,40,.04)}
+  /* image field: one square thumbnail per record, same size everywhere, scaled to
+     the viewport. It shares the top line with the heading, pinned to the right —
+     so nothing sits above the title and every row underneath is full width. */
+  .cardhead{display:flex;gap:10px;align-items:flex-start;justify-content:space-between;margin-bottom:8px}
+  .cardhead>h3{flex:1 1 auto;min-width:0;margin-bottom:0}
+  .cardhead+.kv{border-top:none}          /* the head is a div, so :first-of-type misses */
+  .cardimg{flex:0 0 auto;display:block;width:clamp(43px,7.3vw,80px);aspect-ratio:1/1;
+           border-radius:10px;overflow:hidden;background:var(--chip)}
+  /* cover-crop anchored to the top: a portrait keeps the head, not the midriff.
+     Only the vertical component bites — a wide image has no vertical overflow,
+     so it still crops evenly left/right. */
+  .cardimg img{display:block;width:100%;height:100%;object-fit:cover;object-position:50% 0%}
   .card h3{margin:0 0 8px;font-size:15px;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
   .card h3 .sub{font-weight:500;color:var(--muted);font-size:12px}
   .kv{display:grid;grid-template-columns:140px 1fr;gap:8px;padding:2px 0;border-top:1px solid #f1f3f5}
@@ -93,10 +105,11 @@
   .grid.full .card .kv{grid-template-columns:none;display:flex;gap:6px;border-top:none;padding:1px 0;align-items:baseline}
   .grid.full .card .kv .k::after{content:":"}
   .chip{display:inline-block;background:var(--chip);border-radius:999px;padding:1px 8px;margin:1px 2px 1px 0;font-size:12px}
-  /* auto-generated identifier links — marked so they can't be mistaken for links in the data */
-  a.idlink{border-bottom:1px dotted currentColor}
-  a.idlink:hover{text-decoration:none;border-bottom-style:solid}
-  .card h3 a.idlink{color:inherit}          /* a linked heading still reads as a heading */
+  /* every link the viewer renders — a resolved identifier or a URL from the data —
+     looks the same: accent colour with a dotted underline that solidifies on hover */
+  a.vlink{border-bottom:1px dotted currentColor}
+  a.vlink:hover{text-decoration:none;border-bottom-style:solid}
+  .card h3 a.vlink{color:inherit}          /* a linked heading still reads as a heading */
   .bool{font-weight:600}.b-true{color:var(--ok)}.b-false{color:var(--no)}
   details.cf{margin:3px 0;border-top:1px solid #f1f3f5;padding-top:3px}
   details.cf>summary{cursor:pointer;color:var(--accent);font-size:12px}
@@ -150,6 +163,9 @@
       </label>
       <label>Card subtitle field
         <select id="subField"></select>
+      </label>
+      <label>Card image field
+        <select id="imageField"></select>
       </label>
       <label>View
         <select id="viewMode"><option value="cards">cards</option><option value="full">full-width records</option></select>
@@ -207,6 +223,7 @@ const state = {
   titleSel:null, subSel:null, viewMode:"cards",
   hidden:new Set(),      // fields switched off in the metadata panel (display only)
   autoLink:true, linkPlan:{}, linkFields:{},   // identifier auto-linking (presentational only)
+  imageFields:[], imageSel:null,               // columns that hold images; which one is the thumbnail
   filtered:[], pageItems:[], restoring:false
 };
 
@@ -345,16 +362,67 @@ function buildLinkPlan(){
     if(best) state.linkFields[k]=LINKER_BY_ID[best].label;
   }
 }
+/* ---------- image fields ----------
+   A scalar field whose values are image URLs is shown as a thumbnail on the card
+   instead of as a text row. Detected per field, not per value, so every card gets
+   the same treatment: either the whole column is pictures or none of it is.      */
+const IMG_EXT=/\.(?:jpe?g|png|gif|webp|avif|svg|bmp|ico|tiff?)(?:[?#]|$)/i;
+const IMG_NAME=/(^|_)(image|images|img|photo|photos|picture|pic|thumb|thumbnail|avatar|logo|icon|cover|portrait|headshot|banner|poster)(_|$)/;
+const isURL = s => /^(?:https?:)?\/\//i.test(String(s).trim());
+function isImageURL(s){
+  const v=String(s).trim();
+  if(/^data:image\//i.test(v)) return true;
+  return isURL(v) && IMG_EXT.test(v);
+}
+/* Every field where ~all values are image URLs. A field named like a picture
+   (photo, avatar, logo, …) also qualifies on plain URLs, since plenty of image
+   services serve them without a file extension. The first one is the card image
+   by default; the rest are offered in the Card image field select. */
+function detectImageFields(){
+  state.imageFields=[];
+  const CAP=200;
+  for(const k of state.scalarFields){
+    const vals=[];
+    for(const v of state.values[k].keys()){ vals.push(v); if(vals.length>=CAP) break; }
+    if(!vals.length) continue;
+    const named=IMG_NAME.test(normKey(k));
+    let n=0;
+    for(const v of vals) if(isImageURL(v)||(named&&isURL(v))) n++;
+    if(n>=Math.ceil(vals.length*0.9)) state.imageFields.push(k);
+  }
+}
+/* null when the user chose "(none)", or when the file has no image column */
+function imageField(){
+  if(state.imageSel!==null)
+    return (state.imageSel===""||!state.imageFields.includes(state.imageSel)) ? null : state.imageSel;
+  return state.imageFields[0]||null;
+}
+function imageHTML(src,alt){
+  const u=esc(String(src));
+  return '<a class="cardimg" href="'+u+'" target="_blank" rel="noopener noreferrer">'+
+         '<img src="'+u+'" alt="'+esc(alt)+'" loading="lazy" decoding="async" referrerpolicy="no-referrer" '+
+         'onerror="this.parentNode.style.display=\'none\'"></a>';   // a dead URL leaves no gap
+}
+
 function linkHTML(href,text,note,cls){
   return '<a'+(cls?' class="'+cls+'"':'')+' href="'+esc(href)+'" target="_blank" rel="noopener noreferrer"'+
          (note?' title="'+esc(note)+'"':'')+'>'+esc(text)+'</a>';
 }
 const linkNote = h => h.label+" → "+h.url;
-/* A URL that was literally in the data and is too long to read shows as one word
-   instead, with the full address in the tooltip. Identifier links are never
-   shortened — their text is the identifier, which is the point of showing it. */
+/* A URL that was literally in the data and is too long to read is replaced by a
+   label saying what following it does, with the full address in the tooltip.
+   Identifier links are never shortened — their text is the identifier, the point
+   of the field. The file extension is the only honest clue available offline
+   about whether a link downloads something or opens a page. */
 const URL_TEXT_MAX = 20;
-const urlText = s => s.length>URL_TEXT_MAX ? "hyperlink" : s;
+const PDF_EXT=/\.pdf(?:[?#]|$)/i;
+const FILE_EXT=/\.(?:zip|gz|tgz|bz2|xz|7z|rar|tar|docx?|xlsx?|pptx?|odt|ods|odp|rtf|epub|csv|tsv|txt|json|xml|ya?ml|parquet|dta|sav|sas7bdat|rds|rdata|mat|nc|h5|jpe?g|png|gif|webp|avif|svg|bmp|tiff?|mp3|mp4|mov|avi|mkv|wav|flac|exe|dmg|pkg|deb|rpm|msi|iso)(?:[?#]|$)/i;
+function linkLabel(url,key){
+  if(isImageURL(url)) return "show image";       // opens in a new tab, like the thumbnail
+  if(PDF_EXT.test(url)) return "download pdf";
+  if(FILE_EXT.test(url)) return "download";
+  return key==null||key==="" ? "open link" : "open "+key;
+}
 
 /* ---------- record-array discovery ---------- */
 function arrayCandidates(raw){
@@ -399,6 +467,7 @@ function analyze(){
     }
   }
   buildLinkPlan();          // reuse the distinct-value maps to decide per-field linking
+  detectImageFields();
 }
 
 /* ---------- load ---------- */
@@ -422,7 +491,8 @@ function setRecordSource(key, keepSearch){
   state.records=recordsFor(state.raw,key)||[];
   state.meta=metaFor(state.raw,key);
   analyze();
-  state.titleSel=null; state.subSel=null; state.hidden.clear();   // field names differ per array
+  state.titleSel=null; state.subSel=null; state.imageSel=null;
+  state.hidden.clear();                                           // field names differ per array
   state.page=0; if(!keepSearch){ state.search=""; $("#globalSearch").value=""; }
   populateFieldSelects();
   renderMeta(); renderFilters(); apply();
@@ -439,6 +509,8 @@ function renderMeta(){
   const lf=Object.keys(state.linkFields);
   if(lf.length) rows.push(metaRow("linked ID fields",
     lf.map(k=>k+" ("+state.linkFields[k]+")").join(", ")+(state.autoLink?"":"   — auto-linking off")));
+  if(state.imageFields.length) rows.push(metaRow("image fields",
+    '<span id="imgNote">'+imageNote()+'</span>', true));
   for(const k in state.meta){
     const v=state.meta[k];
     rows.push(metaRow(k, renderValue(v,k), true));
@@ -447,6 +519,12 @@ function renderMeta(){
 }
 function metaRow(k,v,raw){ return '<div class="kv"><span class="k">'+esc(k)+'</span><span class="v">'+(raw?v:esc(String(v)))+'</span></div>'; }
 const hiddenNote = () => state.hidden.size ? "   — "+state.hidden.size+" hidden" : "";
+function imageNote(){                      // which column is the thumbnail, and what the rest do
+  const sel=imageField();
+  return state.imageFields.map(k=>esc(k)+(k!==sel ? "" :
+      state.hidden.has(k) ? "  (card image — switched off)" : "  (card image)")).join(", ")
+    + (sel ? "" : "   — no card image; the rest show as “show image” links");
+}
 /* One checkbox per field: unchecking hides it from the records, nothing else.
    The title/subtitle fields are shown in the card heading, so their boxes are
    fixed on — the Display selects, not this row, decide those. */
@@ -637,6 +715,7 @@ function syncURL(){
   if(!state.autoLink) p.set("links","0");
   if(state.titleSel) p.set("title", state.titleSel);
   if(state.subSel!==null) p.set("sub", state.subSel===""?"__none__":state.subSel);
+  if(state.imageSel!==null) p.set("img", state.imageSel===""?"__none__":state.imageSel);
   if(state.page>0) p.set("page", String(state.page+1));
   for(const k of state.scalarFields){
     const f=state.filters[k]; if(!f) continue;
@@ -658,6 +737,8 @@ function restoreFromParams(params){
   const title=params.get("title"); if(title){ state.titleSel=title; $("#titleField").value=title; }
   const sub=params.get("sub");
   if(sub!==null){ state.subSel = sub==="__none__"?"":sub; $("#subField").value=state.subSel; }
+  const im=params.get("img");
+  if(im!==null){ state.imageSel = im==="__none__"?"":im; $("#imageField").value=state.imageSel; }
   const q=params.get("q"); if(q){ state.search=q; $("#globalSearch").value=q; }
   for(const [key,val] of params){
     if(key.startsWith("f.")){ const f=state.filters[key.slice(2)]; if(f) f.vals.add(val); }
@@ -692,10 +773,14 @@ function renderValue(v,key){
 function renderScalar(v,key){
   if(typeof v==="boolean") return '<span class="bool b-'+v+'">'+v+'</span>';
   const s=String(v);
-  if(/^https?:\/\//i.test(s))                                    // a link that was in the data
-    return linkHTML(s, urlText(s), s.length>URL_TEXT_MAX?s:null, null);
+  const img=isImageURL(s);                                       // includes data: image URIs
+  if(/^https?:\/\//i.test(s)||img){                              // a link that was in the data
+    const label=img||s.length>URL_TEXT_MAX;                      // a picture never shows its address
+    const tip=/^data:/i.test(s) ? "embedded image" : s;          // never dump a base64 payload
+    return linkHTML(s, label?linkLabel(s,key):s, label?tip:null, "vlink");
+  }
   const hit=autoLinkFor(s,key);                                  // a link we derived
-  return hit ? linkHTML(hit.url,s,linkNote(hit),"idlink") : esc(s);
+  return hit ? linkHTML(hit.url,s,linkNote(hit),"vlink") : esc(s);
 }
 function renderObjLine(o,key){
   const t=o.title||o.name||null;
@@ -709,6 +794,11 @@ function populateFieldSelects(){
   const t=$("#titleField"); t.innerHTML=scalarOptions(); t.value=titleField();
   const s=$("#subField"); s.innerHTML='<option value="">(none)</option>'+scalarOptions();
   const sf=subtitleField(); s.value = sf===null ? "" : sf;
+  const i=$("#imageField");        // only columns that actually hold images are offered
+  i.innerHTML='<option value="">(none)</option>'+
+    state.imageFields.map(k=>'<option value="'+esc(k)+'">'+esc(k)+'</option>').join("");
+  const imf=imageField(); i.value = imf===null ? "" : imf;
+  i.disabled = !state.imageFields.length;
 }
 function titleField(){
   if(state.titleSel && state.scalarFields.includes(state.titleSel)) return state.titleSel;
@@ -724,15 +814,17 @@ function renderCards(){
   const tf=titleField();
   const sub=subtitleField();
   const full=state.viewMode==="full";
+  const imf=imageField();
+  const imgF=(imf&&!state.hidden.has(imf))?imf:null;
   $("#cards").innerHTML=state.pageItems.map((r,idx)=>{
     const tv=r?r[tf]:undefined;
     /* a heading that is itself an identifier becomes a link, keeping the heading's own color */
     const th=(tv!=null&&typeof tv!=="object")?autoLinkFor(tv,tf):null;
     const title=(tv==null)?'<span class="muted">(untitled)</span>'
-              : th?linkHTML(th.url,String(tv),linkNote(th),"idlink"):esc(String(tv));
+              : th?linkHTML(th.url,String(tv),linkNote(th),"vlink"):esc(String(tv));
     const subv=(sub&&sub!==tf&&r&&!isMissing(r[sub]))?'<span class="sub">'+esc(String(r[sub]))+'</span>':'';
     let kv='';
-    for(const k of state.scalarFields){ if(k===tf||k===sub||state.hidden.has(k)) continue;
+    for(const k of state.scalarFields){ if(k===tf||k===sub||k===imgF||state.hidden.has(k)) continue;
       const v=r?r[k]:undefined; if(isMissing(v)) continue;   // hide empty scalar fields
       kv+='<div class="kv"><span class="k">'+esc(k)+'</span><span class="v">'+renderValue(v,k)+'</span></div>'; }
     if(full) kv='<div class="kvwrap">'+kv+'</div>';
@@ -741,7 +833,12 @@ function renderCards(){
       const n=Array.isArray(v)?v.length:(v&&typeof v==="object"?Object.keys(v).length:0);
       if(v==null||n===0) continue;   // skip empty non-scalar fields
       cf+='<details class="cf" data-idx="'+idx+'" data-field="'+esc(k)+'"><summary>'+esc(k)+' ('+n+')</summary><div class="cf-body" data-rendered="0"></div></details>'; }
-    return '<div class="card"><h3>'+title+' '+subv+'</h3>'+kv+cf+'</div>';
+    const iv=imgF&&r?r[imgF]:undefined;
+    const img=(!isMissing(iv)&&typeof iv!=="object")?imageHTML(iv,tv==null?"":String(tv)):"";
+    const head='<h3>'+title+' '+subv+'</h3>';
+    /* the picture shares the top line with the heading; everything below is full width */
+    return img ? '<div class="card has-img"><div class="cardhead">'+head+img+'</div>'+kv+cf+'</div>'
+               : '<div class="card">'+head+kv+cf+'</div>';
   }).join("");
 }
 
@@ -771,6 +868,7 @@ $("#metaBody").addEventListener("change",e=>{
   chip.classList.toggle("susp",!cb.checked&&fieldActive(state.filters[k]));
   chip.title=chip.classList.contains("susp")?"its filter is suspended while the field is off":"";
   const n=$("#hidNote"); if(n) n.textContent=hiddenNote();
+  const im=$("#imgNote"); if(im) im.innerHTML=imageNote();   // imageNote() escapes its parts
   syncFilterVisibility(); apply();      // a suspended filter changes what matches
 });
 $("#metaBody").addEventListener("click",e=>{
@@ -785,9 +883,12 @@ $("#metaBody").addEventListener("click",e=>{
 $("#globalSearch").addEventListener("input",e=>{ state.search=e.target.value.trim().toLowerCase(); state.page=0; apply(); });
 $("#pageSize").addEventListener("change",e=>{ state.pageSize=e.target.value==="all"?"all":+e.target.value; state.page=0; apply(); });
 $("#recordArray").addEventListener("change",e=>setRecordSource(e.target.value,false));
-/* a field promoted to the heading stops being hidden — the two would contradict */
-$("#titleField").addEventListener("change",e=>{ state.titleSel=e.target.value; state.hidden.delete(state.titleSel); renderMeta(); renderCards(); syncURL(); });
-$("#subField").addEventListener("change",e=>{ state.subSel=e.target.value; state.hidden.delete(state.subSel); renderMeta(); renderCards(); syncURL(); });
+/* a field promoted to the heading or the card image stops being hidden — the two
+   would contradict — which can also bring its filter panel back, hence apply() */
+function pickField(sel,val){ state[sel]=val; state.hidden.delete(val); renderMeta(); syncFilterVisibility(); apply(); }
+$("#titleField").addEventListener("change",e=>pickField("titleSel",e.target.value));
+$("#subField").addEventListener("change",e=>pickField("subSel",e.target.value));
+$("#imageField").addEventListener("change",e=>pickField("imageSel",e.target.value));
 $("#viewMode").addEventListener("change",e=>{ state.viewMode=e.target.value; renderCards(); syncURL(); });
 $("#autoLink").addEventListener("change",e=>{ state.autoLink=e.target.value==="1"; renderMeta(); renderCards(); syncURL(); });
 $("#first").onclick=()=>{state.page=0;apply()};

@@ -22,7 +22,9 @@ bare `10.1257/aer.20190623` or `0000-0002-1825-0097`, renders as inert text.
   an auto-linked value is not rewritten or shortened.
 - Conservative by default: a false link is worse than a missing one.
 - Extensible in a few lines — one table of resolvers, readable by a non-author.
-- Visibly distinguishable from links that were literally in the data.
+- Visually consistent with the URLs already in the data — one link style for
+  everything the viewer renders. (An earlier draft marked resolved links
+  differently; that distinction was dropped in favor of a uniform look.)
 
 ## Non-Goals for Version 1
 
@@ -184,44 +186,55 @@ the field's `state.linkPlan` entry.
 `link(href, text, resolverLabel)` emits:
 
 ```html
-<a class="idlink" href="…" target="_blank" rel="noopener noreferrer"
+<a class="vlink" href="…" target="_blank" rel="noopener noreferrer"
    title="DOI → https://doi.org/10.1257/aer.20190623">10.1257/aer.20190623</a>
 ```
 
 Arrays of scalar identifiers keep their chip styling and become clickable chips
-(`.chip a.idlink`), which is exactly what a list of DOIs or ORCIDs wants.
+(`.chip a.vlink`), which is exactly what a list of DOIs or ORCIDs wants.
 
 ### Long literal URLs
 
-A URL that was in the data and is longer than `URL_TEXT_MAX` (20) characters
-renders as the single word *hyperlink*, with the full address in both the `href`
-and the `title`. Raw addresses otherwise dominate a card — the bundled dataset
-carries three per record — and unlike an identifier the address itself is rarely
-the thing being read.
+A URL that was in the data and is longer than `URL_TEXT_MAX` (20) characters is
+replaced by a label saying what following it does, with the full address kept in
+both the `href` and the `title`:
+
+| URL | Label |
+|---|---|
+| `.pdf` | `download pdf` |
+| another file extension (`FILE_EXT`: archives, office and data formats, media, installers) | `download` |
+| no file extension | `open <field>` |
+
+Raw addresses otherwise dominate a card — the bundled dataset carries three per
+record — and unlike an identifier the address itself is rarely the thing being
+read. The extension is the only signal available without fetching the URL, so it
+is matched against the path only, ignoring `?query` and `#fragment`; `…/pdf/browse`
+is a page, `…/paper.pdf#page=3` is a download.
 
 This applies only to the verbatim-URL branch. Auto-linked identifiers always show
 their value however long, because the value *is* the information; a DOI collapsed
-to *hyperlink* would destroy the point of the field.
+to a label would destroy the point of the field.
 
 ### Visual treatment
 
-Auto-generated links must be distinguishable from literal URLs in the data, so
-that a wrong resolver is obvious rather than mistaken for source data:
+Every link the viewer renders looks the same, whether it resolved an identifier or
+came verbatim from the data:
 
 ```css
-a.idlink{border-bottom:1px dotted currentColor}
-a.idlink:hover{text-decoration:none;border-bottom-style:solid}
+a.vlink{border-bottom:1px dotted currentColor}
+a.vlink:hover{text-decoration:none;border-bottom-style:solid}
 ```
 
 The dotted underline plus the accent color is enough to read as a link; no glyph
-is appended. The `title` attribute always states the resolver and the full target,
-which doubles as the debugging tool when a link looks wrong.
+is appended. The `title` attribute states the resolver and the full target, which
+doubles as the debugging tool when a link looks wrong — and is the one place the
+two kinds still differ.
 
 ### Card title and subtitle
 
 The title (`:504`) and subtitle (`:505`) are escaped directly, not routed through
 `renderValue`. When the title field resolves, link the heading text itself but
-keep the heading's own color (`.card h3 a.idlink{color:inherit}`), so a page of
+keep the heading's own color (`.card h3 a.vlink{color:inherit}`), so a page of
 cards does not turn into a wall of blue. The subtitle stays plain.
 
 ### Filter panels stay plain
@@ -303,7 +316,7 @@ All in `json/json-browser.html`:
 - `renderCards`: link the card title when its field resolves.
 - Sidebar markup: the **Auto-link IDs** select; new `change` listener.
 - `syncURL` (`:419`) / `restoreFromParams` (`:439`): the `links` parameter.
-- CSS: `a.idlink` rules.
+- CSS: `a.vlink` rules, shared with URLs that came from the data.
 
 Documentation:
 
@@ -376,4 +389,5 @@ detected fields.
 - Per-resolver toggles in the sidebar, if a dataset needs one scheme suppressed.
 - Copy-to-clipboard affordance next to identifiers.
 - A configurable `URL_TEXT_MAX`, or an elided `host/…/tail` form, if the flat
-  *hyperlink* label turns out to hide something worth seeing at a glance.
+  `download` / `open <field>` label turns out to hide something worth seeing at a
+  glance.

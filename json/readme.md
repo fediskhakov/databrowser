@@ -177,6 +177,7 @@ combines (AND) with the field filters and also drives the facet counts.
 | **Records per page** | `100` / `500` / `1000` / `all`. `all` hides the pager. |
 | **Card title field** | Which scalar field is the card heading. Defaults to the first of `name, title, display_name, label, id, uid`, else the first scalar field. |
 | **Card subtitle field** | Optional smaller heading next to the title; `(none)` by default. |
+| **Card image field** | Which column supplies the card thumbnail, when the dataset has [image columns](#image-fields). Defaults to the first one found; `(none)` shows no picture. |
 | **View** | `cards` (responsive grid) or `full-width records` (one record per row, wider key/value layout). |
 | **Auto-link IDs** | `on` (default) / `off`. Turns recognized identifiers into links to their canonical resolver — see [Identifier auto-linking](#identifier-auto-linking). |
 
@@ -247,7 +248,8 @@ the search but not the field switches — use **all** to bring every field back.
 ## How records render
 
 - **Cards** show the title (+ optional subtitle), then one `key: value` row per
-  non-empty scalar field. **Empty fields are hidden** — a scalar field that is
+  non-empty scalar field, plus a square thumbnail when the dataset has an
+  [image field](#image-fields). **Empty fields are hidden** — a scalar field that is
   missing for a record simply doesn't appear on that card.
 - **Nested fields** (arrays/objects) appear as collapsible `field (n)` expanders,
   rendered lazily when opened, and only when non-empty:
@@ -260,12 +262,100 @@ the search but not the field switches — use **all** to bring every field back.
   start with `http(s)://` become clickable links (open in a new tab), `null`/empty
   shows as an em dash, and recognized identifiers (DOI, ORCID, …) become links to
   their canonical resolver — see [Identifier auto-linking](#identifier-auto-linking).
-- **Long URLs are collapsed.** A URL in the data longer than 20 characters is shown
-  as the single word *hyperlink*, with the full address in the tooltip and in the
-  link itself — a page of records stays readable instead of being dominated by
-  addresses. Shorter URLs are shown in full. This applies only to URLs that were
-  literally in the data; auto-linked identifiers always display their identifier,
-  however long, since that value is the thing worth seeing.
+- **Long URLs are collapsed into a label saying what the link does**, so a page of
+  records stays readable instead of being dominated by addresses. A URL in the data
+  longer than 20 characters becomes:
+
+  | The URL points at | Label |
+  |---|---|
+  | an image | `show image` (always, whatever the URL's length) |
+  | a PDF | `download pdf` |
+  | another downloadable file (archive, spreadsheet, dataset, media, installer, …) | `download` |
+  | anything else — a page | `open <field>`, e.g. `open homepage` |
+
+  The full address stays in the link and in its tooltip; shorter URLs are shown in
+  full. The judgement is made from the file extension in the URL path (a trailing
+  `?query` or `#fragment` is ignored), which is the only clue available without
+  fetching anything: `…/paper.pdf#page=3` downloads, `…/pdf/browse` opens.
+
+  This applies only to URLs that were literally in the data; auto-linked
+  identifiers always display their identifier, however long, since that value is
+  the thing worth seeing.
+
+---
+
+## Image fields
+
+If a scalar field holds **image URLs**, it is not printed as a text row — each
+record's picture is shown as a **square thumbnail**.
+
+It sits in the **top-right corner**, sharing the top line with the record's title:
+nothing is pushed above the title, and every key/value row below runs the full
+width of the card. Full-width rows work the same way.
+
+The thumbnail is the same size for every record and scales with the viewport
+(between 43 px and 80 px on a side). The picture fills the square — cropped, never
+squashed — and the corners are rounded to match the cards. Clicking it opens the
+image at full size in a new tab.
+
+**The crop is anchored to the top.** A portrait or otherwise vertical image keeps
+its top and loses its bottom, so faces, logos and headers survive instead of being
+sliced through the middle. Wide images are unaffected vertically — there is nothing
+to choose — and are still cropped evenly left and right.
+
+### What counts as an image field
+
+Detection is per column, not per value, so a dataset either shows pictures for a
+field or it doesn't — never a ragged mix. A scalar field qualifies when **at least
+90% of its distinct values** are image URLs, meaning either:
+
+- an `http(s)` (or protocol-relative) URL whose path ends in `.jpg`, `.jpeg`,
+  `.png`, `.gif`, `.webp`, `.avif`, `.svg`, `.bmp`, `.ico`, `.tif`, or `.tiff` —
+  a trailing `?query` or `#fragment` is fine; or
+- a `data:image/…` URI, which renders with no network access at all; or
+- **any** `http(s)` URL, when the field is *named* like a picture — `image`,
+  `img`, `photo`, `picture`, `pic`, `thumb`, `thumbnail`, `avatar`, `logo`,
+  `icon`, `cover`, `portrait`, `headshot`, `banner`, `poster`. Plenty of image
+  services serve pictures from extensionless URLs, and the field name is the only
+  hint available for those.
+
+A record whose value is missing simply gets no thumbnail, and a URL that fails to
+load collapses its box rather than leaving a broken-image icon.
+
+### Choosing which column is the thumbnail
+
+A dataset can hold several image columns — a portrait *and* a logo, say. Only one
+becomes the card image; the **Card image field** select in the Display options
+decides which. It is offered `(none)` plus every qualifying column, and starts on
+the first one found in the records. The **Metadata & dataset info** panel lists
+them all and marks the choice: `image fields   portrait (card image), logo`.
+
+Every *other* image column renders as a **show image** link that opens the picture
+in a new tab — the same thing clicking the thumbnail does. So switching the select
+from `portrait` to `logo` swaps which one is the picture and which is the link;
+`(none)` turns both into links and leaves the cards text-only.
+
+Image URLs never show their address, however short, since the address is not the
+information. That also keeps embedded `data:` images readable: they render as
+**show image** rather than dumping a base64 payload into the card, and their
+tooltip reads *embedded image*.
+
+The choice is part of the URL (`img=<field>`, or `img=__none__`), so a shared link
+reproduces it.
+
+### Turning it off
+
+Uncheck the field in the metadata panel like any other — the thumbnails disappear,
+and the state travels in the URL as `h.<field>=1`. This also matters for privacy:
+thumbnails are the one thing the viewer fetches besides your JSON, so a dataset of
+remote image URLs means requests to those hosts. They are fetched lazily (only as
+cards scroll into view) and with `referrerpolicy="no-referrer"`, and switching the
+field off stops them entirely. `data:` URIs never touch the network.
+
+`image-test.json` is a fixture for this rule: the `portrait` column has two inline
+`data:` SVGs that render offline — one landscape, one twice as tall as it is wide
+so the top-anchored crop is visible — two remote URLs, and one record with no
+value; a second column, `logo`, exercises the picker.
 
 ---
 
@@ -277,10 +367,10 @@ becomes clickable without the dataset having to carry a URL for it.
 
 The **displayed text is always the raw identifier**; only the link target is
 derived, and it is never collapsed the way a long literal URL is.
-Auto-generated links carry a dotted underline, and their tooltip names the scheme
-and the full target (`DOI → https://doi.org/10.1257/…`), so they can never be
-mistaken for links that were literally in the data. Nothing is fetched while
-rendering — the target is only visited if you click it.
+Resolved identifiers look exactly like the URLs that came with the data — same
+accent color, same dotted underline — and their tooltip names the scheme and the
+full target (`DOI → https://doi.org/10.1257/…`). Nothing is fetched while
+rendering; the target is only visited if you click it.
 
 Auto-linking is **presentational only**. Filters, facet counts, the global search,
 and shareable URLs all keep working on the raw values, so a view behaves
@@ -387,6 +477,7 @@ short):
 | `links` | `0` disables identifier auto-linking (omitted when on, the default) |
 | `title` | Card title field (when changed from the default) |
 | `sub` | Card subtitle field; `__none__` means explicitly no subtitle |
+| `img` | Card image field; `__none__` means explicitly no thumbnail |
 | `page` | 1-based page number (when not on page 1) |
 | `f.<field>=<value>` | A selected value for `<field>` (repeated for multiple values) |
 | `p.<field>=1` | The "not missing" checkbox for `<field>` |
@@ -410,8 +501,9 @@ missing.
 
 - One HTML file; no external scripts, fonts, or stylesheets; the favicon is an
   inline data URI.
-- All processing is client-side. The only network request is the `fetch()` of the
-  JSON file you choose; files you open via the picker or drag-and-drop never leave
+- All processing is client-side. The only network requests are the `fetch()` of the
+  JSON file you choose and, if the dataset has an [image field](#image-fields), the
+  thumbnails themselves; files you open via the picker or drag-and-drop never leave
   the browser.
 - Works offline. Copy `json-browser.html` anywhere and open it.
 
@@ -442,4 +534,6 @@ missing.
 - `example.sh` — sample invocation of `serve-json.sh` with a preset view.
 - `link-test.json` — fixture for [identifier auto-linking](#identifier-auto-linking):
   every recognized scheme plus the near-misses that must stay plain text.
+- `image-test.json` — fixture for [image fields](#image-fields): inline `data:` SVGs
+  (landscape and portrait, to check the crop), remote URLs, and a record with no picture.
 - `readme.md` — this document.

@@ -7,7 +7,7 @@
   "expect_plain": "year, count, country_code, note, internal_id, code, mixed_id, almost_id (only 5 of 6 distinct values match, below the 90% promotion threshold)",
   "records": [
     {
-      "name": "1 — core scholarly IDs",
+      "name": "1 \u2014 core scholarly IDs",
       "doi": "10.1257/aer.20190623",
       "orcid": "0000-0002-1825-0097",
       "arxiv": "arXiv:2101.03970",
@@ -29,14 +29,29 @@
       "code": "0abcdefgh",
       "mixed_id": "not-an-id",
       "almost_id": "W2741809807",
-      "dois": ["10.1093/qje/qjaa021", "10.3982/ECTA14231", "not/a/doi"],
+      "dois": [
+        "10.1093/qje/qjaa021",
+        "10.3982/ECTA14231",
+        "not/a/doi"
+      ],
       "refs": [
-        {"doi": "10.1257/jel.20191450", "openalex_id": "W2755950973", "year": 2019},
-        {"doi": "10.1086/261876", "openalex_id": "W1978296103", "year": 1991}
-      ]
+        {
+          "doi": "10.1257/jel.20191450",
+          "openalex_id": "W2755950973",
+          "year": 2019
+        },
+        {
+          "doi": "10.1086/261876",
+          "openalex_id": "W1978296103",
+          "year": 1991
+        }
+      ],
+      "paper_pdf": "https://example.org/papers/aer-2019-0623.pdf",
+      "replication": "https://example.org/data/replication-package.zip",
+      "landing": "https://example.org/publications/2019/monetary-policy"
     },
     {
-      "name": "2 — bare hosts, mail, repos",
+      "name": "2 \u2014 bare hosts, mail, repos",
       "doi": "doi:10.1093/qje/qjaa021",
       "orcid": "orcid:0000-0001-5109-3700",
       "email": "author@example.org",
@@ -54,12 +69,23 @@
       "mixed_id": "W2741809807",
       "almost_id": "W1978296103",
       "works": [
-        {"title": "A paper with a title renders as a publication line", "journal": "Journal of Examples", "year": 2019},
-        {"title": "Another one", "venue": "Example Conference", "year": 2021}
-      ]
+        {
+          "title": "A paper with a title renders as a publication line",
+          "journal": "Journal of Examples",
+          "year": 2019
+        },
+        {
+          "title": "Another one",
+          "venue": "Example Conference",
+          "year": 2021
+        }
+      ],
+      "paper_pdf": "https://example.org/wp/w12345.pdf#page=3",
+      "replication": "https://example.org/files/tables-and-figures.xlsx?v=2",
+      "landing": "https://example.org/authors/j-carberry/profile.php?id=42"
     },
     {
-      "name": "3 — library and authority IDs",
+      "name": "3 \u2014 library and authority IDs",
       "issn": "00028282",
       "isbn": "0691138569",
       "viaf_id": "102333412",
@@ -74,10 +100,13 @@
       "year": 1776,
       "code": "0000000000",
       "mixed_id": "plain text",
-      "almost_id": "S137773608"
+      "almost_id": "S137773608",
+      "paper_pdf": "https://example.org/dl?year=2020&file=appendix.pdf",
+      "replication": "https://example.org/archive/survey-responses.csv",
+      "landing": "https://example.org/pdf/collection/browse"
     },
     {
-      "name": "4 — awkward but valid values",
+      "name": "4 \u2014 awkward but valid values",
       "doi": "10.1002/(SICI)1099-1255(199709/10)12:5<517::AID-JAE457>3.0.CO;2-J",
       "orcid": "0000-0002-1694-233X",
       "arxiv": "arXiv:math.GT/0309136",
@@ -95,7 +124,7 @@
       "almost_id": "I136199984"
     },
     {
-      "name": "5 — negatives only",
+      "name": "5 \u2014 negatives only",
       "year": 2026,
       "count": 9780262033848,
       "country_code": "de",
@@ -106,12 +135,13 @@
       "almost_id": "W2755950973"
     },
     {
-      "name": "6 — sparse record",
+      "name": "6 \u2014 sparse record",
       "doi": "10.3982/ECTA14231",
       "id": "W1978296103",
       "country_code": "fr",
       "mixed_id": "",
       "almost_id": "definitely not an id"
     }
-  ]
+  ],
+  "expect_url_labels": "paper_pdf -> 'download pdf'; replication -> 'download'; landing -> 'open landing' (no file extension, so it is a page)"
 }
