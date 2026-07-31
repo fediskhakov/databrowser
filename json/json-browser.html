@@ -122,7 +122,14 @@
   details.cf.txt>summary .peek{color:var(--muted);margin-left:6px;display:inline-block;
         max-width:60%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom}
   details.cf.txt[open]>summary .peek{display:none}
-  .cf.txt .cf-body{white-space:pre-wrap;line-height:1.55;max-width:78ch}
+  /* Prose runs the full width of its container and flows as one paragraph: line
+     breaks in the source are whitespace like any other, not layout. */
+  .cf.txt .cf-body{line-height:1.55}
+  /* the same text printed in place, for the full-width view */
+  .lt{margin-top:7px}
+  .lt-k{display:block;color:var(--muted);font-size:12px;margin-bottom:1px}
+  .lt-k::after{content:":"}
+  .lt-v{line-height:1.55;word-break:break-word}
   .cf-body{padding:6px 0 2px}
   .pub{padding:3px 0;border-bottom:1px dashed #eceef1;font-size:13px}
   .pub:last-child{border-bottom:none}
@@ -956,12 +963,16 @@ function renderCards(){
        that column stays an ordinary row rather than a broken image */
     const iv=imgF&&r?r[imgF]:undefined;
     const asImg=!isMissing(iv)&&typeof iv!=="object"&&isImageValue(iv,imgF);
-    let kv='', cf='';
+    let kv='', lt='', cf='';
     for(const k of state.scalarFields){ if(k===tf||k===sub||state.hidden.has(k)) continue;
       if(k===imgF&&asImg) continue;                          // shown as the thumbnail instead
       const v=r?r[k]:undefined; if(isMissing(v)) continue;   // hide empty scalar fields
-      if(isLongText(k)){                                     // prose: full width, collapsed
-        cf+='<details class="cf txt" data-idx="'+idx+'" data-field="'+esc(k)+'">'+
+      if(isLongText(k)){
+        /* A full-width row already gives prose room to read, so print it there and
+           skip the expander; on a card it would be a ribbon, so collapse it. */
+        lt+= full
+          ? '<div class="lt"><span class="lt-k">'+esc(k)+'</span><div class="lt-v">'+renderValue(v,k)+'</div></div>'
+          : '<details class="cf txt" data-idx="'+idx+'" data-field="'+esc(k)+'">'+
             '<summary title="double-click to open this field on every card">'+esc(k)+
             '<span class="peek">'+esc(textPeek(v))+'</span></summary>'+
             '<div class="cf-body" data-rendered="0"></div></details>';
@@ -978,8 +989,8 @@ function renderCards(){
     const img=asImg?imageHTML(iv,tv==null?"":String(tv)):"";
     const head='<h3>'+title+' '+subv+'</h3>';
     /* the picture shares the top line with the heading; everything below is full width */
-    return img ? '<div class="card has-img"><div class="cardhead">'+head+img+'</div>'+kv+cf+'</div>'
-               : '<div class="card">'+head+kv+cf+'</div>';
+    return img ? '<div class="card has-img"><div class="cardhead">'+head+img+'</div>'+kv+lt+cf+'</div>'
+               : '<div class="card">'+head+kv+lt+cf+'</div>';
   }).join("");
 }
 

@@ -227,7 +227,7 @@ combines (AND) with the field filters and also drives the facet counts.
 | **Card title field** | Which scalar field is the card heading. Defaults to the first of `name, title, display_name, label, id, uid`, else the first scalar field. |
 | **Card subtitle field** | Optional smaller heading next to the title; `(none)` by default. |
 | **Card image field** | Which column supplies the card thumbnail. Offers every column holding [at least one picture](#choosing-which-column-is-the-thumbnail); defaults to the first that is *mostly* pictures, else `(none)`. |
-| **View** | `cards` (responsive grid) or `full-width records` (one record per row, wider key/value layout). |
+| **View** | `cards` (responsive grid) or `full-width records` (one record per row, wider key/value layout, with [long text](#long-text-fields) printed in place rather than collapsed). |
 | **Auto-link IDs** | `on` (default) / `off`. Turns recognized identifiers into links to their canonical resolver — see [Identifier auto-linking](#identifier-auto-linking). |
 
 The title and subtitle fields are omitted from the card's key/value body to avoid
@@ -301,10 +301,10 @@ the search but not the field switches — use **all** to bring every field back.
   [image field](#image-fields). **Empty fields are hidden** — a scalar field that is
   missing for a record simply doesn't appear on that card.
 - **Long text fields** — abstracts, descriptions, notes — are *not* squeezed into
-  the value column, where a paragraph becomes a ribbon of six-word lines. They get
-  the same treatment as nested fields: a collapsible section across the **full width
-  of the card**, with the opening words shown beside the collapsed triangle as a
-  teaser. See [Long text fields](#long-text-fields).
+  the value column, where a paragraph becomes a ribbon of six-word lines. On a card
+  they become a collapsible section across its full width, with the opening words as
+  a teaser; in full-width view, where there is room already, they are printed in
+  place. See [Long text fields](#long-text-fields).
 - **Nested fields** (arrays/objects) appear as collapsible `field (n)` expanders,
   rendered lazily when opened, and only when non-empty:
   - an **array of objects** renders each item compactly; if an item has a
@@ -348,17 +348,25 @@ the search but not the field switches — use **all** to bring every field back.
 ## Long text fields
 
 A scalar field whose values run long — an abstract, a description, a licence note —
-is rendered like a nested field rather than as a key/value row: a collapsible
-section spanning the **full width of the card**, with a one-line teaser of the
-opening words next to the collapsed triangle.
+is not squeezed into the value column, where a paragraph becomes a ribbon of
+six-word lines. What happens instead depends on how much room the view has:
 
-The alternative is what you get by default in a card grid: a paragraph poured into
-a 160-pixel value column, six words to a line. Widening every card instead would
-punish the datasets that don't need it, so only the wordy column moves.
+- **cards** — it is rendered like a nested field: a collapsible section spanning
+  the full width of the card, with a one-line teaser of the opening words beside
+  the collapsed triangle. Everything that applies to a nested expander applies
+  here — the text is **rendered lazily** when first opened, **double-clicking** the
+  triangle opens that field on every card at once, and paging or filtering returns
+  them all to closed.
+- **full-width records** — the row is already wide enough to read, so the text is
+  simply **printed in place** under its own label, below the inline key/value pairs,
+  across the whole row. No expander, nothing to click.
 
-Everything that applies to a nested expander applies here: the text is **rendered
-lazily** when first opened, **double-clicking** the triangle opens that field on
-every card at once, and paging or filtering returns them all to closed.
+Either way the text flows as a single paragraph: **newlines in the value are
+treated as ordinary whitespace**, not as layout, so text wrapped at 80 columns in
+the source file doesn't arrive pre-broken at the wrong width.
+
+Widening every card instead would punish the datasets that don't need it, so only
+the wordy column changes.
 
 ### Which columns count as long
 
@@ -377,8 +385,9 @@ filter panel, it can be sorted on, it can be switched off, and the global search
 matches it.
 
 `text-test.json` is a fixture for this: an `abstract` column that expands, short
-columns that stay rows, and a single long `note` among twelve short ones that must
-not drag its column into an expander.
+columns that stay rows, a single long `note` among twelve short ones that must not
+drag its column into an expander, and one abstract with embedded newlines that must
+still read as one paragraph.
 
 ---
 
