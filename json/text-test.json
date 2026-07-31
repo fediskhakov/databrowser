@@ -1,0 +1,95 @@
+{
+  "description": "Fixture for long text fields. `abstract` runs to a few hundred characters on the records that have one, so it should render as a full-width collapsible section rather than a key/value row; `title`, `author`, `journal`, `year` and `note` are short and must stay ordinary rows. One record's `note` is deliberately long — 1 of 12 — which must NOT move the whole column into an expander.",
+  "expect_expanders": "abstract only",
+  "expect_rows": "title, author, year, journal, note",
+  "records": [
+    {
+      "title": "Identification in models of intergenerational mobility",
+      "author": "Grace Hopper",
+      "year": 2019,
+      "abstract": "We study identification of intergenerational mobility parameters when the linkage between parents and children is incomplete and non-random. Existing approaches either discard unmatched records or impute them under assumptions that are difficult to defend. We show that the identified set for the rank-rank slope is characterized by a small number of moment inequalities, that it is sharp, and that it can be computed by linear programming. An application to administrative tax data narrows the reported range by roughly a third.",
+      "journal": "Journal of Examples",
+      "note": "revised"
+    },
+    {
+      "title": "A note on facet counts",
+      "author": "Ada Lovelace",
+      "year": 2021,
+      "abstract": "Faceted browsing is usually described informally. This note gives a precise statement of what a facet count should mean when several filters are active at once, and shows that the common implementation — recomputing every facet under all active filters — reports zero for values the user can still reach. The alternative excludes each field from its own facet.",
+      "journal": "Review of Examples",
+      "note": "short"
+    },
+    {
+      "title": "Short one",
+      "author": "Alan Turing",
+      "year": 2020,
+      "abstract": "A brief remark on the same question, with no formal results.",
+      "journal": "Examples Letters",
+      "note": "This single note is deliberately much longer than the others, running well past the threshold on its own, to check that one outlier in an otherwise short column does not drag the whole column into an expander on every card in the dataset."
+    },
+    {
+      "title": "Sorting under incomplete information",
+      "author": "John von Neumann",
+      "year": 2018,
+      "abstract": "We consider a matching market in which one side observes only a coarse signal of the other side's type. The equilibrium exhibits partial assortativity: high types match assortatively among themselves while low types pool. Comparative statics in the precision of the signal are non-monotone, which we trace to a countervailing effect on the incentive to search.",
+      "journal": "Journal of Examples",
+      "note": "draft"
+    },
+    {
+      "title": "No abstract supplied",
+      "author": "Madonna",
+      "year": 2022,
+      "journal": "Examples Letters",
+      "note": "short"
+    },
+    {
+      "title": "Comment on the above",
+      "author": "Ada Lovelace",
+      "year": 2022,
+      "journal": "Examples Letters",
+      "note": "short"
+    },
+    {
+      "title": "Reply to the comment",
+      "author": "Grace Hopper",
+      "year": 2022,
+      "journal": "Examples Letters",
+      "note": "short"
+    },
+    {
+      "title": "A replication exercise",
+      "author": "Alan Turing",
+      "year": 2023,
+      "journal": "Journal of Examples",
+      "note": "revised"
+    },
+    {
+      "title": "Measurement without theory",
+      "author": "John von Neumann",
+      "year": 2017,
+      "journal": "Review of Examples",
+      "note": "draft"
+    },
+    {
+      "title": "Theory without measurement",
+      "author": "Madonna",
+      "year": 2016,
+      "journal": "Review of Examples",
+      "note": "short"
+    },
+    {
+      "title": "Notes on the identification set",
+      "author": "Ann Smith",
+      "year": 2024,
+      "journal": "Examples Letters",
+      "note": "short"
+    },
+    {
+      "title": "Erratum",
+      "author": "John Smith",
+      "year": 2024,
+      "journal": "Journal of Examples",
+      "note": "short"
+    }
+  ]
+}

@@ -115,6 +115,14 @@
   .bool{font-weight:600}.b-true{color:var(--ok)}.b-false{color:var(--no)}
   details.cf{margin:3px 0;border-top:1px solid #f1f3f5;padding-top:3px}
   details.cf>summary{cursor:pointer;color:var(--accent);font-size:12px;user-select:none}
+  /* A long text field: teaser beside the collapsed triangle, full-width prose when
+     open. The teaser is one line, clipped — if it wrapped, hiding it on open would
+     shrink the summary under the pointer and swallow the second click of a
+     double-click. Same height open or closed. */
+  details.cf.txt>summary .peek{color:var(--muted);margin-left:6px;display:inline-block;
+        max-width:60%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom}
+  details.cf.txt[open]>summary .peek{display:none}
+  .cf.txt .cf-body{white-space:pre-wrap;line-height:1.55;max-width:78ch}
   .cf-body{padding:6px 0 2px}
   .pub{padding:3px 0;border-bottom:1px dashed #eceef1;font-size:13px}
   .pub:last-child{border-bottom:none}
@@ -229,6 +237,7 @@ const state = {
   hidden:new Set(),      // fields switched off in the metadata panel (display only)
   autoLink:true, linkPlan:{}, linkFields:{},   // identifier auto-linking (presentational only)
   imageFields:[], imageAuto:null, imageSel:null,   // columns holding images; the safe default; the pick
+  fieldLen:{},                                     // how long each column's values print
   filtered:[], pageItems:[], restoring:false
 };
 
@@ -485,6 +494,7 @@ function analyze(){
   }
   buildLinkPlan();          // reuse the distinct-value maps to decide per-field linking
   detectImageFields();
+  measureFields();
 }
 
 /* ---------- load ---------- */
@@ -727,6 +737,42 @@ function computeFacets(){
 }
 function fcount(map,k){ return (state[map]&&state[map][k])||(map==="facetVal"?new Map():0); }
 
+/* ---------- long text fields ----------
+   A paragraph squeezed into the value column of a card is a ribbon of six-word
+   lines. Columns whose values run long are shown the way array fields are: a
+   collapsible section across the full width of the card. Judged per column, so
+   every card puts the same field in the same place, and measured on what a value
+   actually PRINTS — a collapsed URL is a short label, a picture is no text. */
+const LONG_TEXT=160;      // characters; beyond this a value reads as prose, not a field
+const PEEK=70;            // how much of it to show next to the collapsed triangle
+function displayLen(v,key){
+  if(v===null||v===undefined||typeof v==="object") return 0;
+  const s=String(v);
+  if(isImageValue(s,key)) return 0;
+  if(/^https?:\/\//i.test(s)) return s.length>URL_TEXT_MAX ? 14 : s.length;   // "open homepage"
+  return s.length;
+}
+function measureFields(){
+  state.fieldLen={};
+  const CAP=500;
+  for(const k of state.scalarFields){
+    const rows=[]; let n=0, seen=0;
+    for(const [v,c] of state.values[k]){ rows.push([displayLen(v,k),c]); n+=c; if(rows.length>=CAP) break; }
+    if(!n){ state.fieldLen[k]=0; continue; }
+    rows.sort((a,b)=>a[0]-b[0]);
+    /* the 90th percentile BY RECORD, so one freak note among thousands of short
+       ones doesn't move a whole column into an expander */
+    let len=0;
+    for(const [l,c] of rows){ len=l; seen+=c; if(seen>=n*0.9) break; }
+    state.fieldLen[k]=len;
+  }
+}
+const isLongText = k => (state.fieldLen[k]||0)>LONG_TEXT;
+const textPeek = s => {
+  const t=String(s).trim().replace(/\s+/g," ");
+  return t.length<=PEEK ? t : t.slice(0,PEEK).replace(/\s+\S*$/,"")+"…";
+};
+
 /* ---------- sorting ---------- */
 /* A field actually called "name" gets two extra options that order by the LAST
    word of the value — surnames, for a list of people. Widen this regex if your
@@ -910,13 +956,19 @@ function renderCards(){
        that column stays an ordinary row rather than a broken image */
     const iv=imgF&&r?r[imgF]:undefined;
     const asImg=!isMissing(iv)&&typeof iv!=="object"&&isImageValue(iv,imgF);
-    let kv='';
+    let kv='', cf='';
     for(const k of state.scalarFields){ if(k===tf||k===sub||state.hidden.has(k)) continue;
       if(k===imgF&&asImg) continue;                          // shown as the thumbnail instead
       const v=r?r[k]:undefined; if(isMissing(v)) continue;   // hide empty scalar fields
+      if(isLongText(k)){                                     // prose: full width, collapsed
+        cf+='<details class="cf txt" data-idx="'+idx+'" data-field="'+esc(k)+'">'+
+            '<summary title="double-click to open this field on every card">'+esc(k)+
+            '<span class="peek">'+esc(textPeek(v))+'</span></summary>'+
+            '<div class="cf-body" data-rendered="0"></div></details>';
+        continue;
+      }
       kv+='<div class="kv"><span class="k">'+esc(k)+'</span><span class="v">'+renderValue(v,k)+'</span></div>'; }
     if(full) kv='<div class="kvwrap">'+kv+'</div>';
-    let cf='';
     for(const k of state.complexFields){ if(state.hidden.has(k)) continue; const v=r?r[k]:null;
       const n=Array.isArray(v)?v.length:(v&&typeof v==="object"?Object.keys(v).length:0);
       if(v==null||n===0) continue;   // skip empty non-scalar fields

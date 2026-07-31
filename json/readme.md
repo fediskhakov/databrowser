@@ -300,6 +300,11 @@ the search but not the field switches — use **all** to bring every field back.
   non-empty scalar field, plus a square thumbnail when the dataset has an
   [image field](#image-fields). **Empty fields are hidden** — a scalar field that is
   missing for a record simply doesn't appear on that card.
+- **Long text fields** — abstracts, descriptions, notes — are *not* squeezed into
+  the value column, where a paragraph becomes a ribbon of six-word lines. They get
+  the same treatment as nested fields: a collapsible section across the **full width
+  of the card**, with the opening words shown beside the collapsed triangle as a
+  teaser. See [Long text fields](#long-text-fields).
 - **Nested fields** (arrays/objects) appear as collapsible `field (n)` expanders,
   rendered lazily when opened, and only when non-empty:
   - an **array of objects** renders each item compactly; if an item has a
@@ -337,6 +342,43 @@ the search but not the field switches — use **all** to bring every field back.
   This applies only to URLs that were literally in the data; auto-linked
   identifiers always display their identifier, however long, since that value is
   the thing worth seeing.
+
+---
+
+## Long text fields
+
+A scalar field whose values run long — an abstract, a description, a licence note —
+is rendered like a nested field rather than as a key/value row: a collapsible
+section spanning the **full width of the card**, with a one-line teaser of the
+opening words next to the collapsed triangle.
+
+The alternative is what you get by default in a card grid: a paragraph poured into
+a 160-pixel value column, six words to a line. Widening every card instead would
+punish the datasets that don't need it, so only the wordy column moves.
+
+Everything that applies to a nested expander applies here: the text is **rendered
+lazily** when first opened, **double-clicking** the triangle opens that field on
+every card at once, and paging or filtering returns them all to closed.
+
+### Which columns count as long
+
+Decided **per column**, so every card puts the same field in the same place. A
+column qualifies when the **90th percentile of its values, weighted by record**,
+prints longer than **160 characters**. Two consequences worth knowing:
+
+- One freak value doesn't move the column. A single 900-character note among
+  hundreds of one-word ones stays an ordinary row (it will simply wrap).
+- What counts is what a value *prints*, not what it stores: a column of long URLs
+  is not long text, because those [collapse to a short label](#how-records-render);
+  a column of image URLs is not text at all.
+
+A long-text column is still an ordinary scalar field everywhere else — it has a
+filter panel, it can be sorted on, it can be switched off, and the global search
+matches it.
+
+`text-test.json` is a fixture for this: an `abstract` column that expands, short
+columns that stay rows, and a single long `note` among twelve short ones that must
+not drag its column into an expander.
 
 ---
 
@@ -610,4 +652,7 @@ missing.
 - `sort-test.json` — fixture for [sorting](#sorting): people whose surnames, one-word
   names, multi-part surnames and shared last names exercise the `name` rule, plus a
   record with no name at all.
+- `text-test.json` — fixture for [long text fields](#long-text-fields): an `abstract`
+  column that becomes an expander, short columns that stay rows, and one long value
+  in an otherwise short column.
 - `readme.md` — this document.
