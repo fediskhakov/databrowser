@@ -27,6 +27,22 @@
   aside.side{grid-area:side;background:var(--panel);border-right:1px solid var(--line);
        overflow:auto;padding:10px;display:flex;flex-direction:column}
   main.main{grid-area:main;overflow:auto;padding:14px}
+  /* The panel folds away: on a phone a fixed 310px column would leave the records
+     a sliver of the screen. Hidden, its grid column collapses to nothing. */
+  .app.sidehidden{grid-template-columns:0 1fr}
+  .app.sidehidden aside.side{display:none}
+  #sideToggle{font-size:14px;line-height:1;padding:5px 9px;flex:none}
+  @media (max-width:820px){
+    /* Stack instead of squeeze: the panel becomes a band above the records. Both
+       selectors, or .app.sidehidden's two-column rule would outrank this one and
+       leave the single-column areas disagreeing with the columns. */
+    .app, .app.sidehidden{grid-template-columns:1fr;grid-template-areas:"top" "side" "main";
+       height:auto;min-height:100vh}
+    aside.side{border-right:none;border-bottom:1px solid var(--line);max-height:70vh}
+    main.main{overflow:visible}
+    header.top h1{font-size:14px}
+  }
+  @media (max-width:520px){ #sideToggle .lbl{display:none} }
   input,select,button{font:inherit;color:inherit}
   .ctl{display:flex;gap:6px;align-items:center}
   .ctl.grow{flex:1 1 auto;min-width:200px}
@@ -150,6 +166,8 @@
 <body>
 <div class="app">
   <header class="top">
+    <button id="sideToggle" aria-expanded="true" aria-controls="side"
+            title="Show or hide sort, filters and display options">☰<span class="lbl"> Filters</span></button>
     <h1>JSON DB Viewer</h1>
     <span id="fileName" class="muted"></span>
     <span class="ctl grow"><input type="search" id="globalSearch" placeholder="Search all fields…"></span>
@@ -161,7 +179,7 @@
     </span>
   </header>
 
-  <aside class="side">
+  <aside class="side" id="side">
     <h2>Sort</h2>
     <div class="sortbox"><select id="sortField"></select></div>
 
@@ -548,6 +566,13 @@ function renderMeta(){
     '<span id="imgNote">'+imageNote()+'</span>', true));
   for(const k in state.meta){
     const v=state.meta[k];
+    /* A file that parks its metadata in an object — "metadata": {...} — would
+       otherwise spend a whole indentation layer on the wrapper. List its entries
+       at this level instead; anything deeper still nests. */
+    if(v && typeof v==="object" && !Array.isArray(v) && Object.keys(v).length){
+      for(const kk in v) rows.push(metaRow(kk, renderValue(v[kk],kk), true));
+      continue;
+    }
     rows.push(metaRow(k, renderValue(v,k), true));
   }
   $("#metaBody").innerHTML=rows.join("");
@@ -1074,6 +1099,18 @@ $("#resetFilters").onclick=()=>{
   apply();
 };
 $("#collapseAll").onclick=()=>document.querySelectorAll(".ffield[open]").forEach(d=>d.open=false);
+
+/* Fold the panel away. Default: open on a desktop, closed on a phone; crossing the
+   breakpoint resets to that default, a click overrides it until the next crossing.
+   Deliberately NOT in the URL — a shared link should not carry your screen width. */
+const NARROW=matchMedia("(max-width:820px)");
+function showSide(on){
+  $(".app").classList.toggle("sidehidden",!on);
+  $("#sideToggle").setAttribute("aria-expanded",on?"true":"false");
+}
+showSide(!NARROW.matches);
+NARROW.addEventListener("change",e=>showSide(!e.matches));
+$("#sideToggle").onclick=()=>showSide($(".app").classList.contains("sidehidden"));
 
 function pickFile(){ $("#fileInput").click(); }
 $("#loadBtn").onclick=pickFile; $("#emptyLoad").onclick=pickFile;

@@ -1,5 +1,13 @@
 {
-  "description": "Fixture for long text fields. `abstract` runs to a few hundred characters on the records that have one, so it should render as a full-width collapsible section rather than a key/value row; `title`, `author`, `journal`, `year` and `note` are short and must stay ordinary rows. One record's `note` is deliberately long — 1 of 12 — which must NOT move the whole column into an expander. One abstract carries embedded newlines, which must be treated as ordinary whitespace — the text reflows as a single paragraph rather than breaking there.",
+  "description": "Fixture for long text fields. `abstract` runs to a few hundred characters on the records that have one, so it should render as a full-width collapsible section rather than a key/value row; `title`, `author`, `journal`, `year` and `note` are short and must stay ordinary rows. One record's `note` is deliberately long — 1 of 12 — which must NOT move the whole column into an expander. One abstract carries embedded newlines, which must be treated as ordinary whitespace — the text reflows as a single paragraph rather than breaking there. The top-level `metadata` object exists to check that a wrapper object's entries are listed at the first level of the panel rather than costing an indentation layer.",
+  "metadata": {
+    "compiled_by": "json-browser test fixture",
+    "compiled_on": "2026-08-01",
+    "source": "https://example.org/text-test",
+    "nested": {
+      "deeper": "this one still indents — only one layer is flattened"
+    }
+  },
   "expect_expanders": "abstract only",
   "expect_rows": "title, author, year, journal, note",
   "records": [

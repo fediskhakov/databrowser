@@ -116,9 +116,10 @@ fields are shown as collapsible expanders on each card, not as filters.
 
 ![JSON DB Viewer — sidebar filters, faceted counts, and record cards](screenshot.png)
 
-- **Header:** title, current filename, a full-width **search** box, the live
-  matched-record count, and pagination (`«` first, `‹` prev, page info, `›` next,
-  `»` last). The pager is hidden when *Records per page* is `all`.
+- **Header:** the **☰** panel button, title, current filename, a full-width
+  **search** box, the live matched-record count, and pagination (`«` first, `‹`
+  prev, page info, `›` next, `»` last). The pager is hidden when *Records per page*
+  is `all`.
 - **Left sidebar:** three sections — **Sort** (one dropdown), **Filters** (its
   **Reset filters** / **Collapse all** buttons, then one collapsible panel per
   scalar field), and **Display** options at the bottom.
@@ -127,6 +128,18 @@ fields are shown as collapsible expanders on each card, not as filters.
   and any non-record top-level keys from the file — then the records as cards.
   Nested fields on a card open with a click, or on every card at once with a
   [double-click](#how-records-render).
+
+### Small screens
+
+The **☰** button in the header folds the whole left panel away, giving the records
+the full width. Below 820px the layout stops squeezing the records into a column
+beside a 310px panel and stacks instead: the panel becomes a scrollable band above
+them, and starts folded, so a phone shows the data first and the controls on
+demand. Widening the window past the breakpoint brings the panel back; a click on
+☰ overrides that until the next crossing.
+
+The state is deliberately **not** in the URL — a shared link shouldn't carry the
+screen width of whoever made it.
 
 ---
 
@@ -249,6 +262,12 @@ opposed to *how* it is displayed:
 Below the controls it reports the record count, the field counts, the
 [identifier schemes detected](#identifier-auto-linking), and every top-level key
 of the file that is not the record array.
+
+A file that parks its metadata inside an object — `"metadata": { "source": …,
+"retrieved": … }` — has that object's entries listed **at the same level as
+everything else**, rather than spending a whole indentation layer on the wrapper.
+Only the wrapper is unpacked: an object nested inside it still renders indented
+under its own key.
 
 ### Switching fields on and off
 
