@@ -199,9 +199,13 @@ next to its name is how many distinct values are currently selectable; fields
 - **not missing** / **missing** checkboxes with counts — keep records that have
   (or lack) a value for the field. "Missing" means `null`, `undefined`, or empty
   string.
-- a checkbox per **value**, with the count of matching records. Fields with many
-  values get a type-ahead box to filter the value list; the list is capped at
-  1000 shown values (with a "refine the filter" note) for performance.
+- a checkbox per **value**, with the count of matching records, ordered
+  **commonest first** — the counts are what you are scanning for, and they move as
+  other filters narrow the set. Values sharing a count fall back to value order
+  (numbers numerically, then text), so ties are predictable rather than incidental.
+  Fields with many values get a type-ahead box to filter the value list; the list
+  is capped at 1000 shown values (with a "refine the filter" note) for performance,
+  though a value you have checked is always shown even if it falls past the cap.
 - **all** / **none** buttons to bulk toggle the visible values.
 
 Within one field, selected values are **OR**-ed (and OR-ed with the

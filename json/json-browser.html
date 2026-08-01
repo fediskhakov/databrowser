@@ -688,13 +688,17 @@ function refreshFacetUI(){
     }
   });
 }
+/* Commonest value first — the counts shown next to them are what you are scanning
+   for. Equal counts fall back to the value itself (numbers numerically, then text)
+   so the order is predictable rather than incidental. */
 function sortVals(entries){
-  return entries.sort((a,b)=>{
-    const na=parseFloat(a[0]), nb=parseFloat(b[0]);
-    const an=!isNaN(na)&&/^-?\d/.test(a[0]), bn=!isNaN(nb)&&/^-?\d/.test(b[0]);
-    if(an&&bn) return na-nb; if(an) return -1; if(bn) return 1;
-    return a[0].toLowerCase()<b[0].toLowerCase()?-1:1;
-  });
+  return entries.sort((a,b)=> b[1]-a[1] || byValue(a[0],b[0]));
+}
+function byValue(a,b){
+  const na=parseFloat(a), nb=parseFloat(b);
+  const an=!isNaN(na)&&/^-?\d/.test(a), bn=!isNaN(nb)&&/^-?\d/.test(b);
+  if(an&&bn) return na-nb; if(an) return -1; if(bn) return 1;
+  return a.toLowerCase()<b.toLowerCase()?-1:1;
 }
 function paintVals(det,q){
   const k=det.dataset.field, vals=det.querySelector(".vals"), checked=state.filters[k].vals;
@@ -704,10 +708,14 @@ function paintVals(det,q){
   entries=sortVals(entries);
   if(q){ const ql=q.toLowerCase(); entries=entries.filter(e=>e[0].toLowerCase().includes(ql)); }
   const CAP=1000, shown=entries.slice(0,CAP);
+  /* Sorting by count sends a checked value that no longer co-occurs (count 0) to
+     the very end, where the cap could hide it — and an invisible filter you cannot
+     switch off is a trap. Pull any such value back into view. */
+  if(entries.length>CAP) for(const e of entries.slice(CAP)) if(checked.has(e[0])) shown.push(e);
   vals.innerHTML=shown.map(([val,c])=>
     '<div class="vrow"><label><input type="checkbox" data-field="'+esc(k)+'" data-val="'+esc(val)+'"'+(checked.has(val)?" checked":"")+'>'+
     '<span class="vtxt">'+esc(val)+'</span></label><span class="vc">'+c+'</span></div>').join("")
-    + (entries.length>CAP?'<div class="muted" style="padding:4px">…'+(entries.length-CAP)+' more — refine the filter</div>':'');
+    + (entries.length>shown.length?'<div class="muted" style="padding:4px">…'+(entries.length-shown.length)+' more — refine the filter</div>':'');
 }
 function toggleAllValues(k,on,det){
   const set=state.filters[k].vals;
