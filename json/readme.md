@@ -8,6 +8,14 @@ fetching the file you point it at.
 Nothing is hard-coded to a dataset: it inspects whatever JSON you load, finds the
 record array and the fields, and builds the interface around them.
 
+![The viewer on the bundled dataset](screenshot.png)
+
+*Above, on `econ_departments.json`: records sorted by country and then by score
+descending; one [saved filter set](#combining-sets-of-filters-with-or) OR-ed with
+the panels, showing that it matches 230 records of which 209 depend on it; filter
+values ordered [commonest first](#filtering); and `repec_id` values resolved into
+[EDIRC links](#identifiers) with long URLs collapsed to what following them does.*
+
 ---
 
 ## Quick start
@@ -59,8 +67,6 @@ object or array is **nested**, and appears as a collapsible expander instead.
 ---
 
 ## Layout
-
-![JSON DB Viewer — sidebar filters, faceted counts, and record cards](screenshot.png)
 
 - **Header** — the **☰** panel button, filename, **search** box, live record count,
   and pagination (hidden when *Records per page* is `all`).

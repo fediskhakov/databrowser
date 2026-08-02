@@ -88,6 +88,7 @@
   .vrow .vc{color:var(--muted);font-size:12px;flex:none}
   .mini{font-size:12px;padding:2px 6px}
   .side .actions{display:flex;gap:6px;margin:4px 4px 6px}
+  .side .actions .ortip{display:flex}   /* transparent wrapper: no inline leading of its own */
   .sortbox{margin:0 4px 2px}
   .sortbox select{width:100%}
   .sortbox .slev+.slev{margin-top:3px}      /* each further level steps in a little */
@@ -108,7 +109,9 @@
   .clause .cx{flex:none;border:none;background:none;color:var(--muted);cursor:pointer;
               font-size:13px;line-height:1;padding:1px 3px;border-radius:4px}
   .clause .cx:hover{background:#fff;color:var(--no)}
-  #orFilter:disabled{opacity:.45;cursor:default}
+  /* pointer-events:none lets the hover land on .ortip instead, so the help tooltip
+     still appears while the button is disabled (it ignores clicks either way) */
+  #orFilter:disabled{opacity:.45;cursor:default;pointer-events:none}
   /* options block */
   .opts{display:flex;flex-direction:column;gap:8px;border:1px solid var(--line);border-radius:8px;padding:9px;background:#fff}
   .opts label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted)}
@@ -206,7 +209,15 @@
     <div class="actions">
       <button class="mini" id="resetFilters">Reset filters</button>
       <button class="mini" id="collapseAll">Collapse all</button>
-      <button class="mini" id="orFilter" title="Save these filters and start a new set — records matching ANY saved set are shown">OR</button>
+      <!-- the help sits on the wrapper: a disabled button never shows its own tooltip,
+           and this one is disabled exactly when nothing is filtered yet -->
+      <span class="ortip" title="OR — show records matching ANY of several filter sets.
+
+Set up filters, then press OR: they are saved as a set and the panels clear, ready for the next one. A record is shown if it matches any saved set, or the panels you are filling in now.
+
+Each saved set shows how many records it matches, and after × how many would disappear if you removed it with ✕.">
+        <button class="mini" id="orFilter">OR</button>
+      </span>
     </div>
     <div id="clauses"></div>
     <div id="filters"></div>
