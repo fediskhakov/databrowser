@@ -13,7 +13,8 @@ record array and the fields, and builds the interface around them.
 *Above, on `econ_departments.json`: records sorted by country and then by score
 descending; one [saved filter set](#combining-sets-of-filters-with-or) OR-ed with
 the panels, showing that it matches 230 records of which 209 depend on it; filter
-values ordered [commonest first](#filtering); and `repec_id` values resolved into
+values ordered [commonest first](#filtering) (numeric fields by value); and
+`repec_id` values resolved into
 [EDIRC links](#identifiers) with long URLs collapsed to what following them does.*
 
 ---
@@ -130,8 +131,15 @@ Each switched-on scalar field gets a collapsible panel:
 - **not missing** / **missing** checkboxes with counts (missing means `null`,
   `undefined` or empty string);
 - a checkbox per **value** with its count, **commonest first** — ties fall back to
-  value order. Many-valued fields get a type-ahead; the list shows at most 1000
-  entries, though a value you have checked always stays visible;
+  value order. **Numeric fields are the exception**: a column whose values are
+  numbers is a scale rather than a set of labels, so it is listed **in ascending
+  numeric order** instead, keeping years or scores in sequence. A column counts as
+  numeric when at least 90% of its distinct values parse as numbers end to end —
+  `2020 Census` and `45%` do not, so a text column that merely starts with digits
+  keeps count order. The verdict is taken once from the whole dataset, so filtering
+  never changes a panel's ordering rule. Many-valued fields get a type-ahead; the
+  list shows at most 1000 entries, though a value you have checked always stays
+  visible;
 - **all** / **none** to bulk toggle.
 
 Within a field values are **OR**-ed; across fields, **AND**-ed. **Reset filters**

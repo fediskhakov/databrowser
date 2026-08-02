@@ -758,10 +758,22 @@ function refreshFacetUI(){
 }
 /* Commonest value first — the counts shown next to them are what you are scanning
    for. Equal counts fall back to the value itself (numbers numerically, then text)
-   so the order is predictable rather than incidental. */
-function sortVals(entries){
+   so the order is predictable rather than incidental.
+
+   A numeric column is the exception: it is a scale, not a set of labels. Years or
+   scores read as 1990, 1991, 1992 …; ordering those by popularity scatters them and
+   hides where the range starts and ends, so they sort by value instead. */
+function sortVals(entries,k){
+  if(isNumericField(k))
+    return entries.sort((a,b)=>{
+      const an=isNumVal(a[0]), bn=isNumVal(b[0]);
+      if(an&&bn) return parseFloat(a[0])-parseFloat(b[0]);
+      if(an!==bn) return an?-1:1;        // the odd non-numeric label sits after the scale
+      return byValue(a[0],b[0]);
+    });
   return entries.sort((a,b)=> b[1]-a[1] || byValue(a[0],b[0]));
 }
+const isNumericField = k => !!(state.fieldNum && state.fieldNum[k]);
 function byValue(a,b){
   const na=parseFloat(a), nb=parseFloat(b);
   const an=!isNaN(na)&&/^-?\d/.test(a), bn=!isNaN(nb)&&/^-?\d/.test(b);
@@ -773,12 +785,12 @@ function paintVals(det,q){
   const fmap=fcount("facetVal",k);                  // values available under the OTHER filters
   let entries=[...fmap.entries()];
   for(const sel of checked){ if(!fmap.has(sel)) entries.push([sel,0]); }  // keep checked visible
-  entries=sortVals(entries);
+  entries=sortVals(entries,k);
   if(q){ const ql=q.toLowerCase(); entries=entries.filter(e=>e[0].toLowerCase().includes(ql)); }
   const CAP=1000, shown=entries.slice(0,CAP);
-  /* Sorting by count sends a checked value that no longer co-occurs (count 0) to
-     the very end, where the cap could hide it — and an invisible filter you cannot
-     switch off is a trap. Pull any such value back into view. */
+  /* A checked value that no longer co-occurs (count 0) can land past the cap and
+     vanish — and an invisible filter you cannot switch off is a trap. Pull any
+     such value back into view. */
   if(entries.length>CAP) for(const e of entries.slice(CAP)) if(checked.has(e[0])) shown.push(e);
   vals.innerHTML=shown.map(([val,c])=>
     '<div class="vrow"><label><input type="checkbox" data-field="'+esc(k)+'" data-val="'+esc(val)+'"'+(checked.has(val)?" checked":"")+'>'+
@@ -930,12 +942,26 @@ function displayLen(v,key){
   if(/^https?:\/\//i.test(s)) return s.length>URL_TEXT_MAX ? 14 : s.length;   // "open homepage"
   return s.length;
 }
+/* Strict on purpose: "2020 Census" and "45%" are labels that happen to start with
+   digits, not numbers, and treating them as numbers would order a text field by
+   whatever integer it opens with. */
+const NUM_VAL=/^[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?$/;
+const isNumVal = v => NUM_VAL.test(String(v).trim());
 function measureFields(){
-  state.fieldLen=bare();
+  state.fieldLen=bare(); state.fieldNum=bare();
   const CAP=500;
   for(const k of state.scalarFields){
-    const rows=[]; let n=0, seen=0;
-    for(const [v,c] of state.values[k]){ rows.push([displayLen(v,k),c]); n+=c; if(rows.length>=CAP) break; }
+    const rows=[]; let n=0, seen=0, num=0;
+    for(const [v,c] of state.values[k]){
+      rows.push([displayLen(v,k),c]); n+=c;
+      if(isNumVal(v)) num++;
+      if(rows.length>=CAP) break;
+    }
+    /* Numeric when nearly every DISTINCT value is a number: the list being ordered
+       is the distinct values, so that is the honest basis — a field of 40 text
+       labels is not numeric just because its 3 numeric values are the common ones.
+       Judged on the whole dataset, so filtering can never flip the ordering rule. */
+    state.fieldNum[k]=rows.length>1 && num>=rows.length*0.9;
     if(!n){ state.fieldLen[k]=0; continue; }
     rows.sort((a,b)=>a[0]-b[0]);
     /* the 90th percentile BY RECORD, so one freak note among thousands of short
