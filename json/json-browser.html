@@ -90,6 +90,9 @@
   .side .actions{display:flex;gap:6px;margin:4px 4px 6px}
   .sortbox{margin:0 4px 2px}
   .sortbox select{width:100%}
+  .sortbox .slev+.slev{margin-top:3px}      /* each further level steps in a little */
+  .sortbox .slev1{margin-left:12px}
+  .sortbox .slev2{margin-left:24px}
   /* saved filter sets, OR-ed with each other and with whatever is in the panels */
   #clauses{margin:0 4px 6px}
   #clauses .chead{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:2px 0 3px}
@@ -197,7 +200,7 @@
 
   <aside class="side" id="side">
     <h2>Sort</h2>
-    <div class="sortbox"><select id="sortField"></select></div>
+    <div class="sortbox" id="sortbox"></div>
 
     <h2>Filters <span class="muted" id="filterHint"></span></h2>
     <div class="actions">
@@ -276,7 +279,8 @@ const state = {
   facetVal:{}, facetMiss:{}, facetPres:{},   // live, recomputed each apply()
   filters:{},            // field -> {vals:Set, missing:bool, present:bool}   (the live set)
   clauses:[],            // saved filter sets, OR-ed with each other and with the live one
-  search:"", pageSize:100, page:0, sortField:"", sortDesc:false, sortLast:false,
+  search:"", pageSize:100, page:0,
+  sorts:[],              // [{k,desc,last}] — level 1 first, each breaking the one above
   titleSel:null, subSel:null, viewMode:"cards",
   hidden:new Set(),      // fields switched off in the metadata panel (display only)
   autoLink:true, linkPlan:{}, linkFields:{},   // identifier auto-linking (presentational only)
@@ -563,7 +567,7 @@ function setRecordSource(key, keepSearch){
   state.meta=metaFor(state.raw,key);
   analyze();
   state.titleSel=null; state.subSel=null; state.imageSel=null;
-  state.sortField=""; state.sortDesc=false; state.sortLast=false;
+  state.sorts=[]; state.sortSig=null;
   state.hidden.clear(); state.clauses=[];                         // field names differ per array
   state.page=0; if(!keepSearch){ state.search=""; $("#globalSearch").value=""; }
   populateFieldSelects();
@@ -646,27 +650,47 @@ function syncFieldUI(){
   });
   const tot=state.scalarFields.length;
   $("#filterHint").textContent="("+(shown<tot?shown+" of "+tot:tot)+" fields)";
-  /* Each field twice: ▲ ascending, ▼ descending. The direction rides on a data
-     attribute rather than inside the value, so field names needing no escaping
-     stay the option's value whatever characters they contain. */
-  const s=$("#sortField");
-  s.innerHTML='<option value="">(file order)</option>'+
+  state.sortSig=null;            // the field list changed, so rebuild the sort selects
+  renderSortSelects(activeSorts());
+}
+
+/* ---------- the sort selects ----------
+   At most three levels: past that the ordering is doing more than a reader can
+   follow, and every extra select costs sidebar room.
+   One per level, plus one more while the order is still undecided, so the cascade
+   grows only as far as the data needs. Each field appears twice (▲ ascending, ▼
+   descending); the direction rides on a data attribute rather than inside the
+   value, so a field name keeps its own characters whatever they are. */
+function sortOptions(sel,level){
+  const none=level ? "(none)" : "(file order)";
+  return '<option value="">'+none+'</option>'+
     state.scalarFields.filter(k=>!state.hidden.has(k)).map(k=>{
       const o='<option value="'+esc(k)+'"';
-      return o+'>'+esc(k)+' ▲</option>'+
-             o+' data-desc="1">'+esc(k)+' ▼</option>'+
+      /* usesLastWord, not sel.last: a stale last=1 on a field that has no last-word
+         options degrades to the plain ascending one rather than matching nothing */
+      const on=(desc,last)=> sel&&sel.k===k&&!!sel.desc===desc&&usesLastWord(sel)===last ? " selected" : "";
+      return o+on(false,false)+'>'+esc(k)+' ▲</option>'+
+             o+' data-desc="1"'+on(true,false)+'>'+esc(k)+' ▼</option>'+
         (isNameField(k) ?                            // surname ordering, for a list of people
-             o+' data-last="1">'+esc(k)+' (last word) ▲</option>'+
-             o+' data-last="1" data-desc="1">'+esc(k)+' (last word) ▼</option>' : "");
+             o+' data-last="1"'+on(false,true)+'>'+esc(k)+' (last word) ▲</option>'+
+             o+' data-last="1" data-desc="1"'+on(true,true)+'>'+esc(k)+' (last word) ▼</option>' : "");
     }).join("");
-  const sk=sortBy();             // a suspended sort shows as (file order) until its field is back
-  s.selectedIndex=0;
-  if(sk){
-    const i=[...s.options].findIndex(o=>o.value===sk
-      && (o.dataset.desc==="1")===state.sortDesc
-      && (o.dataset.last==="1")===sortLastWord());
-    if(i>=0) s.selectedIndex=i;
+}
+function renderSortSelects(levels){
+  levels=levels||activeSorts();
+  const extra=sortHasTies(levels)?1:0;             // ties left -> offer to break them
+  const n=Math.min(MAX_SORTS,Math.max(1,state.sorts.length+extra));
+  const sig=n+"|"+state.sorts.map(s=>s.k+(s.desc?"▼":"▲")+(s.last?"L":"")).join(",")+
+            "|"+state.scalarFields.filter(k=>!state.hidden.has(k)).join(",");
+  if(state.sortSig===sig) return;                  // nothing structural changed; leave the DOM alone
+  state.sortSig=sig;
+  let html="";
+  for(let i=0;i<n;i++){          // each level is stepped in a little, no wording needed
+    const sel=state.sorts[i]||null;
+    html += '<div class="slev slev'+i+'"><select data-level="'+i+'"'+(i?'':' id="sortField"')+'>'+
+            sortOptions(sel,i)+'</select></div>';
   }
+  $("#sortbox").innerHTML=html;
 }
 function renderFieldBody(det){
   const k=det.dataset.field, body=det.querySelector(".fbody");
@@ -918,11 +942,29 @@ const isNameField = k => NAME_FIELD.test(normKey(k));
 const lastWord = v => { const p=String(v).trim().split(/\s+/); return p[p.length-1]; };
 
 /* Suspended while its field is switched off, exactly like that field's filter. */
-function sortBy(){
-  const k=state.sortField;
-  return k && state.scalarFields.includes(k) && !state.hidden.has(k) ? k : null;
+/* The levels that actually apply: a level whose field has been switched off is
+   skipped, exactly as a live filter on that field is suspended, and the ones below
+   it move up rather than the whole sort collapsing. */
+function activeSorts(){
+  return state.sorts.filter(s=>s.k && state.scalarFields.includes(s.k) && !state.hidden.has(s.k));
 }
-function sortLastWord(){ const k=sortBy(); return !!(k && state.sortLast && isNameField(k)); }
+const MAX_SORTS=3;
+const usesLastWord = s => !!(s.last && isNameField(s.k));
+function cmpMulti(x,y,levels){
+  for(const s of levels){
+    const c=cmpRecords(x,y,s.k,s.desc,usesLastWord(s));
+    if(c) return c;                        // first level that separates them decides
+  }
+  return 0;
+}
+/* Is the order still undecided anywhere? state.filtered is already sorted, so any
+   adjacent pair that compares equal is a tie the next level could break. */
+function sortHasTies(levels){
+  if(!levels.length) return false;
+  for(let i=1;i<state.filtered.length;i++)
+    if(!cmpMulti(state.filtered[i-1],state.filtered[i],levels)) return true;
+  return false;
+}
 /* Ascending. Numbers — and strings that are numbers — compare numerically, so 9
    comes before 10; everything else compares as text, case- and accent-insensitively,
    with embedded digits still ordered numerically. Missing values never reach here. */
@@ -960,8 +1002,9 @@ function apply(){
   });
   state.clauseUniq=uniq; state.clauseHits=hits;
   paintClauseCounts();
-  const sk=sortBy();      // sort the whole result, not just the page; Array#sort is stable
-  if(sk) state.filtered.sort((x,y)=>cmpRecords(x,y,sk,state.sortDesc,sortLastWord()));
+  const levels=activeSorts();   // sort the whole result, not just the page; Array#sort is stable
+  if(levels.length) state.filtered.sort((x,y)=>cmpMulti(x,y,levels));
+  renderSortSelects(levels);    // offer another level only while ties remain
   computeFacets();
   refreshFacetUI();
   $("#resCount").textContent=state.filtered.length.toLocaleString();
@@ -984,15 +1027,21 @@ function syncURL(){
   if(state.fileName) p.set("file", state.fileName);
   if(state.recordKey && arrayCandidates(state.raw).length>1) p.set("rec", state.recordKey);
   if(state.search) p.set("q", state.search);
-  if(state.sortField){ p.set("sort", state.sortField);
-    if(state.sortDesc) p.set("desc","1");
-    if(state.sortLast) p.set("last","1"); }
+  /* One parameter per sort level, its name carrying the direction: sa/sd ascending
+     or descending, sla/sld for the last-word variants. Levels are read back in the
+     order they appear, so no numbering is needed. */
+  for(const s of state.sorts){
+    if(!s.k) continue;
+    p.append((s.last?"sl":"s")+(s.desc?"d":"a"), s.k);
+  }
   if(state.pageSize!==100) p.set("ps", String(state.pageSize));
   if(state.viewMode!=="cards") p.set("view", state.viewMode);
   if(!state.autoLink) p.set("links","0");
-  if(state.titleSel) p.set("title", state.titleSel);
-  if(state.subSel!==null) p.set("sub", state.subSel===""?"__none__":state.subSel);
-  if(state.imageSel!==null) p.set("img", state.imageSel===""?"__none__":state.imageSel);
+  if(state.titleSel) p.set("t", state.titleSel);
+  if(state.subSel) p.set("st", state.subSel);      // no subtitle is the default: nothing to write
+  /* the card image is the one setting whose default is not "none", so "none" has to
+     be written down — as an empty value, not a sentinel word */
+  if(state.imageSel!==null) p.set("img", state.imageSel);
   if(state.page>0) p.set("page", String(state.page+1));
   for(const k of state.scalarFields){
     const f=state.filters[k]; if(!f) continue;
@@ -1021,15 +1070,25 @@ function restoreFromParams(params){
   const ps=params.get("ps"); if(ps){ state.pageSize=ps==="all"?"all":(+ps||100); $("#pageSize").value=ps; }
   const view=params.get("view"); if(view){ state.viewMode=view; $("#viewMode").value=view; }
   const links=params.get("links"); if(links==="0"){ state.autoLink=false; $("#autoLink").value="0"; }
-  const title=params.get("title"); if(title){ state.titleSel=title; $("#titleField").value=title; }
-  const sub=params.get("sub");
+  /* the long names are the pre-2026-08 spelling, still read so old links work */
+  const title=params.get("t")||params.get("title");
+  if(title){ state.titleSel=title; $("#titleField").value=title; }
+  const sub=params.get("st")!==null?params.get("st"):params.get("sub");
   if(sub!==null){ state.subSel = sub==="__none__"?"":sub; $("#subField").value=state.subSel; }
   const im=params.get("img");
   if(im!==null){ state.imageSel = im==="__none__"?"":im; $("#imageField").value=state.imageSel; }
   const q=params.get("q"); if(q){ state.search=q; $("#globalSearch").value=q; }
-  const so=params.get("sort");                              // syncFieldUI() below sets the select
-  if(so){ state.sortField=so; state.sortDesc=params.get("desc")==="1";
-          state.sortLast=params.get("last")==="1"; }
+  state.sorts=[];                                          // renderSortSelects() below draws them
+  for(const [key,val] of params){                          // levels in the order they appear
+    const m=/^s(l?)([ad])$/.exec(key);
+    if(m && val && state.sorts.length<MAX_SORTS)
+      state.sorts.push({k:val, desc:m[2]==="d", last:m[1]==="l"});
+  }
+  if(!state.sorts.length) for(let i=0;i<MAX_SORTS;i++){     // the old sort/desc/last spelling
+    const n=i?String(i+1):"";
+    const k=params.get("sort"+n); if(!k) break;
+    state.sorts.push({k, desc:params.get("desc"+n)==="1", last:params.get("last"+n)==="1"});
+  }
   const saved={};                                   // clause number -> spec being rebuilt
   for(const [key,val] of params){
     const m=/^([fpm])(\d*)\.([\s\S]+)$/.exec(key);
@@ -1224,12 +1283,13 @@ $("#metaBody").addEventListener("click",e=>{
   renderMeta(); syncFieldUI(); apply();
 });
 
-$("#sortField").addEventListener("change",e=>{
-  const o=e.target.selectedOptions[0];
-  state.sortField=o?o.value:"";
-  state.sortDesc=!!(o&&o.dataset.desc==="1");
-  state.sortLast=!!(o&&o.dataset.last==="1");
-  state.page=0; apply();
+/* delegated: the selects are rebuilt whenever the cascade grows or shrinks */
+$("#sortbox").addEventListener("change",e=>{
+  const sel=e.target.closest("select[data-level]"); if(!sel) return;
+  const i=+sel.dataset.level, o=sel.selectedOptions[0];
+  if(!o||!o.value) state.sorts.length=i;           // "(none)" drops this level and the ones below
+  else state.sorts[i]={k:o.value, desc:o.dataset.desc==="1", last:o.dataset.last==="1"};
+  state.sortSig=null; state.page=0; apply();
 });
 $("#globalSearch").addEventListener("input",e=>{ state.search=e.target.value.trim().toLowerCase(); state.page=0; apply(); });
 $("#pageSize").addEventListener("change",e=>{ state.pageSize=e.target.value==="all"?"all":+e.target.value; state.page=0; apply(); });

@@ -120,7 +120,8 @@ fields are shown as collapsible expanders on each card, not as filters.
   **search** box, the live matched-record count, and pagination (`«` first, `‹`
   prev, page info, `›` next, `»` last). The pager is hidden when *Records per page*
   is `all`.
-- **Left sidebar:** three sections — **Sort** (one dropdown), **Filters** (its
+- **Left sidebar:** three sections — **Sort** (one dropdown, plus
+  [further ones](#breaking-ties-with-further-fields) while ties remain), **Filters** (its
   **Reset filters** / **Collapse all** / **[OR](#combining-sets-of-filters-with-or)**
   buttons, any saved filter sets, then one collapsible panel per scalar field), and
   **Display** options at the bottom.
@@ -150,6 +151,32 @@ The **Sort** dropdown at the top of the sidebar orders the records by any one fi
 that is switched on. Every field is listed **twice** — `world_rank ▲` sorts
 ascending, `world_rank ▼` descending — so either direction is one choice away.
 `(file order)`, the default, leaves the records as they appear in the file.
+
+### Breaking ties with further fields
+
+Sorting on a field with repeated values leaves the order half-decided. Whenever
+that happens a **second dropdown appears**, stepped in below the first, and then a
+third — each one ordering only the records the levels above left tied:
+
+```
+SORT
+  country ▲
+    category ▲
+      world_rank ▼
+```
+
+The extra box is offered only while ties actually remain, so a field with unique
+values (an id, say) ends the cascade immediately, and it stops at **three levels**
+regardless — past that the ordering is doing more than a reader can follow.
+
+Each level has its own direction, and its own `(last word)` variants where they
+apply. Setting a level to `(none)` drops it and everything below it. A level whose
+field is later switched off is skipped and the ones under it move up, matching how
+a filter on a switched-off field is suspended.
+
+Every level travels in the URL as one short parameter whose name carries the
+direction — `sa=country&sd=category` is *country ascending, then category
+descending* — read back in the order they appear, so no numbering is needed.
 
 Values sort by what they are, not by how they print: numbers — and strings that are
 numbers — compare numerically, so `9` comes before `10`; text compares
@@ -186,8 +213,7 @@ and search currently match.
 Switching the sort field off in the [metadata panel](#switching-fields-on-and-off)
 **suspends** the sort the same way it suspends that field's filter — the records
 return to file order and the dropdown shows `(file order)` — and switching the
-field back on resumes it, direction included. The choice travels in the URL as
-`sort=<field>`, plus `desc=1` when descending.
+field back on resumes it, direction included.
 
 ---
 
@@ -535,8 +561,8 @@ information. That also keeps embedded `data:` images readable: they render as
 **show image** rather than dumping a base64 payload into the card, and their
 tooltip reads *embedded image*.
 
-The choice is part of the URL (`img=<field>`, or `img=__none__`), so a shared link
-reproduces it.
+The choice is part of the URL (`img=<field>`, or a bare `img=` for none), so a
+shared link reproduces it.
 
 ### Turning it off
 
@@ -668,15 +694,14 @@ short):
 | `file` | Path or URL of the JSON to load |
 | `rec` | Record-array key (only emitted when the file has more than one array) |
 | `q` | Global search string |
-| `sort` | Field to sort records by |
-| `desc` | `1` for descending (omitted when ascending) |
-| `last` | `1` to sort a `name` field by its [last word](#sorting-people-by-surname) |
+| `sa=<field>` / `sd=<field>` | A [sort level](#sorting), ascending or descending. Repeatable — the levels apply in the order they appear |
+| `sla=<field>` / `sld=<field>` | The same for [last-word](#sorting-people-by-surname) order |
 | `ps` | Records per page (`100`/`500`/`1000`/`all`); omitted when `100` |
 | `view` | `full` for full-width records (omitted for the default `cards`) |
 | `links` | `0` disables identifier auto-linking (omitted when on, the default) |
-| `title` | Card title field (when changed from the default) |
-| `sub` | Card subtitle field; `__none__` means explicitly no subtitle |
-| `img` | Card image field; `__none__` means explicitly no thumbnail |
+| `t` | Card title field (when changed from the default) |
+| `st` | Card subtitle field. No subtitle is the default, so choosing none simply omits it |
+| `img` | Card image field. Empty (`img=`) means explicitly no thumbnail — needed because the default here is the auto-detected column, not none |
 | `page` | 1-based page number (when not on page 1) |
 | `f.<field>=<value>` | A selected value for `<field>` (repeated for multiple values) |
 | `p.<field>=1` | The "not missing" checkbox for `<field>` |
@@ -685,7 +710,11 @@ short):
 | `h.<field>=1` | `<field>` is switched off — hidden from the records and its filter suspended (see [the metadata panel](#switching-fields-on-and-off)) |
 
 Field names are prefixed (`f.`/`p.`/`m.`/`h.`, plus a set number for saved sets)
-so they can never collide with the reserved parameters. Example:
+so they can never collide with the reserved parameters.
+
+Links written before August 2026 used longer names — `title`, `sub`, `sort`/`desc`/
+`last`, and a `__none__` marker. Those are still understood; opening one rewrites it
+in the short form. Example:
 
 ```
 ?file=top5-approach/authors.json&q=harvard&ps=all&m.phd_year=1&f.status=verified&f.status=student&f.research_field=applied
