@@ -270,6 +270,9 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const NULLKEY = "(null)";
 const isMissing = v => v===null || v===undefined || v==="";
+/* `k in r` throws on a primitive, and a records array may hold anything at all */
+const isRec = r => !!r && typeof r==="object";
+const bare = () => Object.create(null);      // a lookup table safe to key by field name
 const valKey = v => (v===null||v===undefined) ? NULLKEY : String(v);
 
 const state = {
@@ -389,13 +392,19 @@ function tryLinker(L,s){
 }
 /* Which resolver, if any, claims this value in this field? Cheap: anchored regexes,
    at most a handful of candidates per cell, nothing compiled at call time. */
+const GATED=new Map();                       // field name -> the linkers whose gate it passes
+function gatedFor(nk){
+  let l=GATED.get(nk);
+  if(!l){ l=LINKERS.filter(L=>L.fields&&L.fields.test(nk)); GATED.set(nk,l); }
+  return l;
+}
 function resolveLink(value, key){
   const s=String(value).trim();
   if(!s || s.length>300) return null;                   // no pathological inputs
   for(const L of LINKERS){ if(L.tier!=="self") continue; const h=tryLinker(L,s); if(h) return h; }
   if(key!=null){
     const nk=normKey(key);
-    for(const L of LINKERS){ if(L.fields&&L.fields.test(nk)){ const h=tryLinker(L,s); if(h) return h; } }
+    for(const L of gatedFor(nk)){ const h=tryLinker(L,s); if(h) return h; }
     const planned=state.linkPlan[key];                  // promoted for this whole column
     if(planned) return tryLinker(LINKER_BY_ID[planned], s);
   }
@@ -407,7 +416,7 @@ const autoLinkFor = (v,key) => state.autoLink ? resolveLink(v,key) : null;
    and record the dominant scheme per field for the metadata panel. Runs in analyze(),
    so rendering only ever tests the field's own candidates. */
 function buildLinkPlan(){
-  state.linkPlan={}; state.linkFields={};
+  state.linkPlan=bare(); state.linkFields=bare();
   const CAP=200, ambiguous=LINKERS.filter(L=>L.tier==="plan");
   for(const k of state.scalarFields){
     const vals=[];
@@ -513,8 +522,8 @@ function recordsFor(raw,key){
   return [];                                   // scalar / nothing -> no records
 }
 function metaFor(raw,key){
-  if(key==="__root__" || !raw || typeof raw!=="object") return {};
-  const o={}; for(const x in raw) if(x!==key) o[x]=raw[x]; return o;
+  if(key==="__root__" || !raw || typeof raw!=="object") return bare();
+  const o=bare(); for(const x in raw) if(x!==key) o[x]=raw[x]; return o;
 }
 
 /* ---------- analysis ---------- */
@@ -530,12 +539,15 @@ function analyze(){
   state.fields=fieldSet;
   state.scalarFields=fieldSet.filter(k=>!nonScalar.has(k));
   state.complexFields=fieldSet.filter(k=>nonScalar.has(k));
-  state.values={}; state.filters={}; state.missCount={}; state.presCount={};
+  /* Object.create(null): a field named __proto__ would otherwise not be a normal
+     key — assigning a number to it is a silent no-op, and its count would print
+     as "[object Object]" */
+  state.values=bare(); state.filters=bare(); state.missCount=bare(); state.presCount=bare();
   for(const k of state.scalarFields){ state.values[k]=new Map(); state.filters[k]={vals:new Set(),missing:false,present:false}; state.missCount[k]=0; state.presCount[k]=0; }
   const total=state.records.length;
   for(const r of state.records){
     for(const k of state.scalarFields){
-      const has = r && (k in r); const v = has? r[k] : undefined;
+      const has = isRec(r) && (k in r); const v = has? r[k] : undefined;
       if(isMissing(v)){ state.missCount[k]++; }
       else { state.presCount[k]++; const m=state.values[k]; const kk=valKey(v); m.set(kk,(m.get(kk)||0)+1); }
     }
@@ -663,9 +675,11 @@ function syncFieldUI(){
    value, so a field name keeps its own characters whatever they are. */
 function sortOptions(sel,level){
   const none=level ? "(none)" : "(file order)";
+  /* data-k marks a real field: a field named "" would otherwise produce an option
+     indistinguishable from this one, and picking it would silently mean "no sort" */
   return '<option value="">'+none+'</option>'+
     state.scalarFields.filter(k=>!state.hidden.has(k)).map(k=>{
-      const o='<option value="'+esc(k)+'"';
+      const o='<option data-k value="'+esc(k)+'"';
       /* usesLastWord, not sel.last: a stale last=1 on a field that has no last-word
          options degrades to the plain ascending one rather than matching nothing */
       const on=(desc,last)=> sel&&sel.k===k&&!!sel.desc===desc&&usesLastWord(sel)===last ? " selected" : "";
@@ -811,7 +825,7 @@ function clearLiveFilters(){
 /* ---------- filtering + paging ---------- */
 function fieldActive(f){ return !!(f && (f.vals.size||f.missing||f.present)); }
 function fieldOK(r,k,f){                      // does r satisfy field k's filter?
-  const v=(r&&k in r)?r[k]:undefined, miss=isMissing(v);
+  const v=isRec(r)&&(k in r)?r[k]:undefined, miss=isMissing(v);
   if(f.present&&!miss) return true;
   if(f.missing&&miss) return true;
   if(f.vals.size&&!miss&&f.vals.has(valKey(v))) return true;
@@ -863,24 +877,17 @@ function liveTerms(){
   }
   return out;
 }
-function recordMatches(r,live){
-  if(!searchOK(r)) return false;               // the search applies to the whole union
-  for(const c of state.clauses) if(clauseOK(r,c)) return true;
-  if(state.clauses.length && !live.length) return false;   // an empty panel adds nothing
-  return live.every(([k,f])=>fieldOK(r,k,f));
-}
 
 /* Honest facets: for each field, the values+counts available given the OTHER
    active filters (and search). A record contributes to field k's facet iff it
    fails AT MOST field k itself — so it fails 0 active filters (counts toward all
    fields) or exactly k (counts toward k only). O(records × active filters). */
-function computeFacets(){
+function computeFacets(searched){
   const SF=state.scalarFields.filter(k=>!state.hidden.has(k));   // no panel, no facet to feed
-  const fv={}, fm={}, fp={};
+  const fv=bare(), fm=bare(), fp=bare();
   for(const k of SF){ fv[k]=new Map(); fm[k]=0; fp[k]=0; }
   const active=SF.filter(k=>fieldActive(state.filters[k]));
-  for(const r of state.records){
-    if(!searchOK(r)) continue;
+  for(const r of searched){
     let failed=null, cnt=0;
     for(const k of active){
       if(!fieldOK(r,k,state.filters[k])){ cnt++; if(cnt>1) break; failed=k; }
@@ -888,7 +895,7 @@ function computeFacets(){
     if(cnt>=2) continue;
     const targets = cnt===1 ? [failed] : SF;
     for(const k of targets){
-      const v=(r&&k in r)?r[k]:undefined;
+      const v=isRec(r)&&(k in r)?r[k]:undefined;
       if(isMissing(v)) fm[k]++;
       else { fp[k]++; const kk=valKey(v); fv[k].set(kk,(fv[k].get(kk)||0)+1); }
     }
@@ -913,7 +920,7 @@ function displayLen(v,key){
   return s.length;
 }
 function measureFields(){
-  state.fieldLen={};
+  state.fieldLen=bare();
   const CAP=500;
   for(const k of state.scalarFields){
     const rows=[]; let n=0, seen=0;
@@ -965,6 +972,9 @@ function sortHasTies(levels){
     if(!cmpMulti(state.filtered[i-1],state.filtered[i],levels)) return true;
   return false;
 }
+/* One collator, built once: passing the options to localeCompare re-resolves them
+   on every call, and a sort makes O(n log n) of them. */
+const COLLATOR = new Intl.Collator(undefined,{sensitivity:"base",numeric:true});
 /* Ascending. Numbers — and strings that are numbers — compare numerically, so 9
    comes before 10; everything else compares as text, case- and accent-insensitively,
    with embedded digits still ordered numerically. Missing values never reach here. */
@@ -972,7 +982,7 @@ function cmpVals(a,b){
   if(typeof a==="boolean"||typeof b==="boolean") return (a?1:0)-(b?1:0);
   const na=+a, nb=+b;
   if(!isNaN(na)&&!isNaN(nb)&&String(a).trim()!==""&&String(b).trim()!=="") return na-nb;
-  return String(a).localeCompare(String(b),undefined,{sensitivity:"base",numeric:true});
+  return COLLATOR.compare(String(a),String(b));
 }
 /* Records missing the field stay last in BOTH directions — flipping the order of
    the data shouldn't dredge the empty rows to the top. Ties return 0, so a stable
@@ -987,13 +997,17 @@ function cmpRecords(x,y,k,desc,last){
 }
 function apply(){
   const live=liveTerms();
+  /* searchOK() scans every field of a record, so it is by far the priciest test
+     here; run it once and let both the filter pass and the facets reuse the result */
+  const searched = state.search ? state.records.filter(searchOK) : state.records;
   /* Filter and tally in one pass. For each saved set we count the records it puts
      on screen that nothing else does — remove that set and exactly those disappear
      — plus, for the tooltip, how many it matches in all. */
   const cs=state.clauses, n=cs.length;
   const uniq=new Array(n).fill(0), hits=new Array(n).fill(0);
-  state.filtered=state.records.filter(r=>{
-    if(!searchOK(r)) return false;                       // the search applies to everything
+  /* A record is shown when it matches any saved set, or the live panels — which
+     count as one more set, except that empty panels add nothing. */
+  state.filtered=searched.filter(r=>{
     let matched=0, only=-1;
     for(let i=0;i<n;i++) if(clauseOK(r,cs[i])){ hits[i]++; only=(++matched===1)?i:-1; }
     const liveHit = (n && !live.length) ? false : live.every(([k,f])=>fieldOK(r,k,f));
@@ -1005,7 +1019,7 @@ function apply(){
   const levels=activeSorts();   // sort the whole result, not just the page; Array#sort is stable
   if(levels.length) state.filtered.sort((x,y)=>cmpMulti(x,y,levels));
   renderSortSelects(levels);    // offer another level only while ties remain
-  computeFacets();
+  computeFacets(searched);
   refreshFacetUI();
   $("#resCount").textContent=state.filtered.length.toLocaleString();
   const ps=state.pageSize==="all"?(state.filtered.length||1):state.pageSize;
@@ -1093,7 +1107,8 @@ function restoreFromParams(params){
   if(sub!==null){ state.subSel = sub==="__none__"?"":sub; $("#subField").value=state.subSel; }
   const im=params.one("img");
   if(im!==null){ state.imageSel = im==="__none__"?"":im; $("#imageField").value=state.imageSel; }
-  const q=params.one("q"); if(q){ state.search=q; $("#globalSearch").value=q; }
+  const q=params.one("q");                       // lowercased like the box does, so a
+  if(q){ state.search=q.toLowerCase(); $("#globalSearch").value=q; }   // hand-typed ?q=Foo matches
   state.sorts=[];                                          // renderSortSelects() below draws them
   for(const [key,raw] of params.list){                     // levels in the order they appear
     const m=/^s(l?)([ad])$/.exec(key);
@@ -1121,10 +1136,10 @@ function restoreFromParams(params){
   for(const [key,raw] of params.list){
     const vals = raw ? raw.split(",").map(decQ) : [];
     let m;
-    if(m=/^(f)(\d*)\.([\s\S]+)$/.exec(key)) term(m[2],"f",m[3],vals);          // f.field=a,b,c
+    if(m=/^(f)(\d*)\.([\s\S]*)$/.exec(key)) term(m[2],"f",m[3],vals);          // f.field=a,b,c
     else if(m=/^([pmh])(\d*)$/.exec(key)) for(const k of vals) term(m[2],m[1],k,null);
     /* the pre-2026-08 spelling: one parameter per field, carrying =1 */
-    else if(m=/^([pmh])(\d*)\.([\s\S]+)$/.exec(key)) term(m[2],m[1],m[3],null);
+    else if(m=/^([pmh])(\d*)\.([\s\S]*)$/.exec(key)) term(m[2],m[1],m[3],null);
   }
   state.clauses=Object.keys(saved).sort((a,b)=>a-b).map(n=>makeClause(saved[n]));
   renderClauses();
@@ -1145,8 +1160,11 @@ function renderValue(v,key){
   if(v===null||v===undefined) return '<span class="muted">—</span>';
   if(Array.isArray(v)){
     if(!v.length) return '<span class="muted">[]</span>';
-    if(typeof v[0]==="object"&&v[0]!==null) return v.map(o=>renderObjLine(o,key)).join("");
-    return v.map(x=>'<span class="chip">'+renderScalar(x,key)+'</span>').join("");
+    /* decided per element, not from v[0]: a mixed array would otherwise render its
+       objects as "[object Object]", or crash on a null among the objects */
+    return v.map(x => (x!==null&&typeof x==="object")
+      ? renderObjLine(x,key)
+      : '<span class="chip">'+renderScalar(x,key)+'</span>').join("");
   }
   if(typeof v==="object")
     return '<div class="obj">'+Object.entries(v).map(([k,val])=>'<div class="kv"><span class="k">'+esc(k)+'</span><span class="v">'+renderValue(val,k)+'</span></div>').join("")+'</div>';
@@ -1307,11 +1325,20 @@ $("#metaBody").addEventListener("click",e=>{
 $("#sortbox").addEventListener("change",e=>{
   const sel=e.target.closest("select[data-level]"); if(!sel) return;
   const i=+sel.dataset.level, o=sel.selectedOptions[0];
-  if(!o||!o.value) state.sorts.length=i;           // "(none)" drops this level and the ones below
+  if(!o||!o.hasAttribute("data-k")) state.sorts.length=i;   // "(none)" drops this level and those below
   else state.sorts[i]={k:o.value, desc:o.dataset.desc==="1", last:o.dataset.last==="1"};
   state.sortSig=null; state.page=0; apply();
 });
-$("#globalSearch").addEventListener("input",e=>{ state.search=e.target.value.trim().toLowerCase(); state.page=0; apply(); });
+/* Typing re-runs the whole pipeline — filter, sort, facets — over every record, so
+   a long query would do it once per keystroke. Wait for a pause instead. The timer
+   always fires (trailing edge), so the final keystroke can never be dropped. */
+let searchTimer=null;
+$("#globalSearch").addEventListener("input",e=>{
+  const v=e.target.value.trim().toLowerCase();
+  clearTimeout(searchTimer);
+  searchTimer=setTimeout(()=>{ state.search=v; state.page=0; apply(); },
+                         state.records.length>2000 ? 150 : 0);
+});
 $("#pageSize").addEventListener("change",e=>{ state.pageSize=e.target.value==="all"?"all":+e.target.value; state.page=0; apply(); });
 $("#recordArray").addEventListener("change",e=>setRecordSource(e.target.value,false));
 /* a field promoted to the heading or the card image stops being hidden — the two
@@ -1361,13 +1388,18 @@ $("#urlLoadBtn").onclick=()=>loadFromURL($("#urlInput").value);
 $("#urlInput").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); loadFromURL(e.target.value); } });
 $("#emptyUrlLoad").onclick=()=>loadFromURL($("#emptyUrlInput").value);
 $("#emptyUrlInput").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); loadFromURL(e.target.value); } });
-$("#fileInput").addEventListener("change",e=>{ const f=e.target.files[0]; if(!f) return;
-  const rd=new FileReader(); rd.onload=()=>{ try{ loadData(JSON.parse(rd.result),f.name);}catch(err){alert("Invalid JSON: "+err.message);} }; rd.readAsText(f); });
+function readFile(f){
+  if(!f) return;
+  const rd=new FileReader();
+  rd.onload=()=>{ try{ loadData(JSON.parse(rd.result),f.name); }
+                  catch(err){ alert("Could not read "+f.name+":\n"+err.message); } };
+  rd.readAsText(f);
+}
+$("#fileInput").addEventListener("change",e=>readFile(e.target.files[0]));
 const drop=$("#drop");
 window.addEventListener("dragover",e=>{e.preventDefault();drop.style.display="flex"});
 ["dragleave","drop"].forEach(ev=>window.addEventListener(ev,e=>{ if(ev==="dragleave"&&e.relatedTarget) return; drop.style.display="none"; }));
-window.addEventListener("drop",e=>{ e.preventDefault(); const f=e.dataTransfer.files[0]; if(!f) return;
-  const rd=new FileReader(); rd.onload=()=>{ try{ loadData(JSON.parse(rd.result),f.name);}catch(err){alert("Invalid JSON: "+err.message);} }; rd.readAsText(f); });
+window.addEventListener("drop",e=>{ e.preventDefault(); readFile(e.dataTransfer.files[0]); });
 
 (async function(){
   const params=parseQuery(location.search);
