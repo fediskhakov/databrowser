@@ -1,0 +1,12 @@
+{
+  "__proto__": {"leaked": "this must not become sibling metadata"},
+  "note": "hostile shapes: a primitive among the records, a __proto__ field name, an empty field name, and arrays of mixed type",
+  "records": [
+    {"name": "Alice", "__proto__": "proto-as-a-field-name", "": "empty-key", "tags": [{"title": "T"}, null, "loose", 7], "n": 1},
+    "a bare string where a record should be",
+    {"name": "Bob", "__proto__": "proto-again", "": "empty-key", "tags": [1, {"a": 2}], "n": 2},
+    42,
+    null,
+    {"name": "Carol", "tags": [], "n": 3}
+  ]
+}

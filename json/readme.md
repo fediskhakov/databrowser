@@ -372,8 +372,13 @@ leave the browser. Copy the file anywhere and it works offline.
 - `serve-json.sh` — serves the viewer with a given JSON file and opens it.
 - `example.sh` — sample invocation with a preset view.
 - `readme.md` — this document.
+- `tests/` — the test suites; `tests/run.sh` runs all of them. Needs node and
+  python3, plus Chrome for the ones that drive the real page. See
+  [tests/readme.md](tests/readme.md).
 
 Fixtures, each exercising one rule and its near-misses:
 `link-test.json` (identifier schemes), `image-test.json` (thumbnails, crop, picker),
 `sort-test.json` (surnames, one-word names, missing values),
-`text-test.json` (long text, embedded newlines, wrapper metadata).
+`text-test.json` (long text, embedded newlines, wrapper metadata),
+`messy-test.json` (hostile shapes: a primitive among the records, a `__proto__`
+field name, an empty field name, mixed arrays).
