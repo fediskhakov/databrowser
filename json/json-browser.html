@@ -1021,96 +1021,116 @@ function apply(){
 }
 
 /* ---------- URL sync (shareable filter state) ---------- */
+/* Built by hand rather than with URLSearchParams, so that anything repeated packs
+   into ONE comma-joined parameter: f.university=A,B,C instead of the field name
+   over and over. Each value is percent-encoded first, so a comma inside a value
+   arrives as %2C and can never be mistaken for the separator. */
+const encQ = s => encodeURIComponent(String(s)).replace(/%20/g,"+");
+const decQ = s => decodeURIComponent(String(s).replace(/\+/g," "));
 function syncURL(){
   if(state.restoring) return;
-  const p=new URLSearchParams();
-  if(state.fileName) p.set("file", state.fileName);
-  if(state.recordKey && arrayCandidates(state.raw).length>1) p.set("rec", state.recordKey);
-  if(state.search) p.set("q", state.search);
+  const parts=[];
+  const put =(k,v)=>parts.push(encQ(k)+"="+encQ(v));
+  const list=(k,vs)=>{ if(vs.length) parts.push(encQ(k)+"="+vs.map(encQ).join(",")); };
+  if(state.fileName) put("file", state.fileName);
+  if(state.recordKey && arrayCandidates(state.raw).length>1) put("rec", state.recordKey);
+  if(state.search) put("q", state.search);
   /* One parameter per sort level, its name carrying the direction: sa/sd ascending
      or descending, sla/sld for the last-word variants. Levels are read back in the
-     order they appear, so no numbering is needed. */
-  for(const s of state.sorts){
-    if(!s.k) continue;
-    p.append((s.last?"sl":"s")+(s.desc?"d":"a"), s.k);
-  }
-  if(state.pageSize!==100) p.set("ps", String(state.pageSize));
-  if(state.viewMode!=="cards") p.set("view", state.viewMode);
-  if(!state.autoLink) p.set("links","0");
-  if(state.titleSel) p.set("t", state.titleSel);
-  if(state.subSel) p.set("st", state.subSel);      // no subtitle is the default: nothing to write
+     order they appear, so no numbering is needed — and they must stay one per
+     parameter, since packing them would lose that order. */
+  for(const s of state.sorts) if(s.k) put((s.last?"sl":"s")+(s.desc?"d":"a"), s.k);
+  if(state.pageSize!==100) put("ps", String(state.pageSize));
+  if(state.viewMode!=="cards") put("view", state.viewMode);
+  if(!state.autoLink) put("links","0");
+  if(state.titleSel) put("t", state.titleSel);
+  if(state.subSel) put("st", state.subSel);        // no subtitle is the default: nothing to write
   /* the card image is the one setting whose default is not "none", so "none" has to
      be written down — as an empty value, not a sentinel word */
-  if(state.imageSel!==null) p.set("img", state.imageSel);
-  if(state.page>0) p.set("page", String(state.page+1));
-  for(const k of state.scalarFields){
-    const f=state.filters[k]; if(!f) continue;
-    if(f.present) p.append("p."+k,"1");
-    if(f.missing) p.append("m."+k,"1");
-    for(const v of f.vals) p.append("f."+k, v);
-  }
-  /* saved sets are numbered from 1; the live set keeps the unprefixed names, so
-     links made before this feature existed still mean exactly what they did */
-  state.clauses.forEach((c,i)=>{
-    const n=i+1;
-    for(const [k,f] of c.terms){
-      if(f.present) p.append("p"+n+"."+k,"1");
-      if(f.missing) p.append("m"+n+"."+k,"1");
-      for(const v of f.vals) p.append("f"+n+"."+k, v);
+  if(state.imageSel!==null) put("img", state.imageSel);
+  if(state.page>0) put("page", String(state.page+1));
+  const clause=(n,terms)=>{                        // n is "" for the live set, 1,2,… for saved ones
+    const present=[], missing=[];
+    for(const [k,f] of terms){
+      if(f.vals.size) list("f"+n+"."+k, [...f.vals]);
+      if(f.present) present.push(k);
+      if(f.missing) missing.push(k);
     }
-  });
-  for(const k of state.fields) if(state.hidden.has(k)) p.append("h."+k,"1");   // switched-off fields
-  const qs=p.toString();
+    list("p"+n, present); list("m"+n, missing);    // the flags name their fields, so no =1 needed
+  };
+  clause("", state.scalarFields.filter(k=>state.filters[k]).map(k=>[k,state.filters[k]]));
+  state.clauses.forEach((c,i)=>clause(i+1, c.terms));
+  list("h", state.fields.filter(k=>state.hidden.has(k)));      // switched-off fields
+  const qs=parts.join("&");
   history.replaceState(null,"", qs?("?"+qs):location.pathname);
+}
+/* Values are split on commas BEFORE decoding, so an encoded %2C stays part of its
+   value. Repeated keys (old links) accumulate rather than the first one winning. */
+function parseQuery(search){
+  const list=[];
+  for(const pair of String(search).replace(/^\?/,"").split("&")){
+    if(!pair) continue;
+    const i=pair.indexOf("=");
+    list.push([decQ(i<0?pair:pair.slice(0,i)), i<0?null:pair.slice(i+1)]);
+  }
+  return {
+    list,
+    one(k){ const e=list.find(x=>x[0]===k); return e ? (e[1]===null?"":decQ(e[1])) : null; },
+    many(k){ return list.filter(x=>x[0]===k && x[1]).flatMap(x=>x[1].split(",").map(decQ)); }
+  };
 }
 function restoreFromParams(params){
   // record source first — switching it re-analyzes and resets filters
-  const rec=params.get("rec");
+  const rec=params.one("rec");
   if(rec && arrayCandidates(state.raw).some(c=>c.key===rec)){ $("#recordArray").value=rec; setRecordSource(rec,true); }
-  const ps=params.get("ps"); if(ps){ state.pageSize=ps==="all"?"all":(+ps||100); $("#pageSize").value=ps; }
-  const view=params.get("view"); if(view){ state.viewMode=view; $("#viewMode").value=view; }
-  const links=params.get("links"); if(links==="0"){ state.autoLink=false; $("#autoLink").value="0"; }
+  const ps=params.one("ps"); if(ps){ state.pageSize=ps==="all"?"all":(+ps||100); $("#pageSize").value=ps; }
+  const view=params.one("view"); if(view){ state.viewMode=view; $("#viewMode").value=view; }
+  const links=params.one("links"); if(links==="0"){ state.autoLink=false; $("#autoLink").value="0"; }
   /* the long names are the pre-2026-08 spelling, still read so old links work */
-  const title=params.get("t")||params.get("title");
+  const title=params.one("t")||params.one("title");
   if(title){ state.titleSel=title; $("#titleField").value=title; }
-  const sub=params.get("st")!==null?params.get("st"):params.get("sub");
+  const sub=params.one("st")!==null?params.one("st"):params.one("sub");
   if(sub!==null){ state.subSel = sub==="__none__"?"":sub; $("#subField").value=state.subSel; }
-  const im=params.get("img");
+  const im=params.one("img");
   if(im!==null){ state.imageSel = im==="__none__"?"":im; $("#imageField").value=state.imageSel; }
-  const q=params.get("q"); if(q){ state.search=q; $("#globalSearch").value=q; }
+  const q=params.one("q"); if(q){ state.search=q; $("#globalSearch").value=q; }
   state.sorts=[];                                          // renderSortSelects() below draws them
-  for(const [key,val] of params){                          // levels in the order they appear
+  for(const [key,raw] of params.list){                     // levels in the order they appear
     const m=/^s(l?)([ad])$/.exec(key);
-    if(m && val && state.sorts.length<MAX_SORTS)
-      state.sorts.push({k:val, desc:m[2]==="d", last:m[1]==="l"});
+    if(m && raw && state.sorts.length<MAX_SORTS)
+      state.sorts.push({k:decQ(raw), desc:m[2]==="d", last:m[1]==="l"});
   }
   if(!state.sorts.length) for(let i=0;i<MAX_SORTS;i++){     // the old sort/desc/last spelling
     const n=i?String(i+1):"";
-    const k=params.get("sort"+n); if(!k) break;
-    state.sorts.push({k, desc:params.get("desc"+n)==="1", last:params.get("last"+n)==="1"});
+    const k=params.one("sort"+n); if(!k) break;
+    state.sorts.push({k, desc:params.one("desc"+n)==="1", last:params.one("last"+n)==="1"});
   }
   const saved={};                                   // clause number -> spec being rebuilt
-  for(const [key,val] of params){
-    const m=/^([fpm])(\d*)\.([\s\S]+)$/.exec(key);
-    if(m){
-      const [,kind,num,k]=m;
-      if(!num){                                     // the live set
-        const f=state.filters[k]; if(!f) continue;
-        if(kind==="f") f.vals.add(val); else if(kind==="p") f.present=true; else f.missing=true;
-      }else{                                        // a saved set
-        const s=saved[num]||(saved[num]={f:{},p:[],m:[]});
-        if(kind==="f") (s.f[k]||(s.f[k]=[])).push(val);
-        else if(kind==="p") s.p.push(k); else s.m.push(k);
-      }
-      continue;
+  const term=(num,kind,k,vals)=>{
+    if(kind==="h"){ if(state.fields.includes(k)) state.hidden.add(k); return; }
+    if(!num){                                       // the live set
+      const f=state.filters[k]; if(!f) return;
+      if(kind==="f") for(const v of vals) f.vals.add(v);
+      else if(kind==="p") f.present=true; else f.missing=true;
+    }else{                                          // a saved set
+      const s=saved[num]||(saved[num]={f:{},p:[],m:[]});
+      if(kind==="f") (s.f[k]||(s.f[k]=[])).push(...vals);
+      else if(kind==="p") s.p.push(k); else s.m.push(k);
     }
-    if(key.startsWith("h.")){ const k=key.slice(2); if(state.fields.includes(k)) state.hidden.add(k); }
+  };
+  for(const [key,raw] of params.list){
+    const vals = raw ? raw.split(",").map(decQ) : [];
+    let m;
+    if(m=/^(f)(\d*)\.([\s\S]+)$/.exec(key)) term(m[2],"f",m[3],vals);          // f.field=a,b,c
+    else if(m=/^([pmh])(\d*)$/.exec(key)) for(const k of vals) term(m[2],m[1],k,null);
+    /* the pre-2026-08 spelling: one parameter per field, carrying =1 */
+    else if(m=/^([pmh])(\d*)\.([\s\S]+)$/.exec(key)) term(m[2],m[1],m[3],null);
   }
   state.clauses=Object.keys(saved).sort((a,b)=>a-b).map(n=>makeClause(saved[n]));
   renderClauses();
   renderMeta();                 // reflect restored field switches / auto-link note
   syncFieldUI();                // and the sidebar's field-dependent controls
-  const pg=params.get("page"); if(pg){ state.page=Math.max(0,(+pg||1)-1); }
+  const pg=params.one("page"); if(pg){ state.page=Math.max(0,(+pg||1)-1); }
   document.querySelectorAll(".ffield").forEach(d=>{
     const f=state.filters[d.dataset.field];
     if(f) d.dataset.active=(f.vals.size||f.missing||f.present)?"1":"0";
@@ -1350,8 +1370,8 @@ window.addEventListener("drop",e=>{ e.preventDefault(); const f=e.dataTransfer.f
   const rd=new FileReader(); rd.onload=()=>{ try{ loadData(JSON.parse(rd.result),f.name);}catch(err){alert("Invalid JSON: "+err.message);} }; rd.readAsText(f); });
 
 (async function(){
-  const params=new URLSearchParams(location.search);
-  const file=params.get("file");          // no default — blank page until a file is given
+  const params=parseQuery(location.search);
+  const file=params.one("file");          // no default — blank page until a file is given
   if(file){
     state.restoring=true;
     try{

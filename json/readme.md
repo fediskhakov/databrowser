@@ -32,7 +32,7 @@ to the viewer.
 
 Any extra arguments are appended to the page URL as query parameters, so you can
 launch the viewer in a preset state — global search (`q=…`), paging (`ps=…`),
-view mode (`view=full`), or filters (`f.<field>=<value>`, repeatable for OR). A
+view mode (`view=full`), or filters (`f.<field>=<value>`, comma-separated for OR). A
 bare-integer argument is taken as the port. See [Shareable URLs](#shareable-urls)
 for the full parameter list.
 
@@ -379,7 +379,7 @@ Switch the field back on and the panel returns exactly as you left it — same o
 state, same checked values — and the filter reapplies. Nothing is rebuilt in
 between; the panel is only hidden.
 
-A shareable link carries both parts (`h.<field>=1` and the suspended `f.<field>=…`),
+A shareable link carries both parts (the field's name in `h=` and the suspended `f.<field>=…`),
 so a reloaded view behaves identically.
 
 **Global search still matches on switched-off fields.** Search is for finding
@@ -392,8 +392,8 @@ The **card title and subtitle fields** appear in the heading, so their boxes are
 shown fixed on (highlighted, not clickable) and **none** skips them. Choosing a
 switched-off field as the title switches it back on.
 
-The whole state lives in the URL (`h.<field>=1` per field), so a link reproduces
-exactly the set of fields you left showing. **Reset filters** clears filters and
+The whole state lives in the URL — one `h=` parameter naming the switched-off
+fields — so a link reproduces exactly the set of fields you left showing. **Reset filters** clears filters and
 the search but not the field switches — use **all** to bring every field back.
 
 ---
@@ -567,7 +567,7 @@ shared link reproduces it.
 ### Turning it off
 
 Uncheck the field in the metadata panel like any other — the thumbnails disappear,
-and the state travels in the URL as `h.<field>=1`. This also matters for privacy:
+and the field is named in the URL's `h=` list. This also matters for privacy:
 thumbnails are the one thing the viewer fetches besides your JSON, so a dataset of
 remote image URLs means requests to those hosts. They are fetched lazily (only as
 cards scroll into view) and with `referrerpolicy="no-referrer"`, and switching the
@@ -703,21 +703,27 @@ short):
 | `st` | Card subtitle field. No subtitle is the default, so choosing none simply omits it |
 | `img` | Card image field. Empty (`img=`) means explicitly no thumbnail — needed because the default here is the auto-detected column, not none |
 | `page` | 1-based page number (when not on page 1) |
-| `f.<field>=<value>` | A selected value for `<field>` (repeated for multiple values) |
-| `p.<field>=1` | The "not missing" checkbox for `<field>` |
-| `m.<field>=1` | The "missing" checkbox for `<field>` |
-| `f<n>.<field>` `p<n>.<field>` `m<n>.<field>` | The same three, for [saved filter set](#combining-sets-of-filters-with-or) `<n>` (numbered from 1) |
-| `h.<field>=1` | `<field>` is switched off — hidden from the records and its filter suspended (see [the metadata panel](#switching-fields-on-and-off)) |
+| `f.<field>=a,b,c` | The selected values for `<field>`, comma-separated |
+| `p=<fields>` / `m=<fields>` | The fields whose "not missing" / "missing" checkbox is set, comma-separated |
+| `f<n>.<field>` `p<n>` `m<n>` | The same three, for [saved filter set](#combining-sets-of-filters-with-or) `<n>` (numbered from 1) |
+| `h=<fields>` | The [switched-off fields](#switching-fields-on-and-off) — hidden from the records, their filters suspended |
 
-Field names are prefixed (`f.`/`p.`/`m.`/`h.`, plus a set number for saved sets)
+Anything that can repeat is **packed into a single parameter**: the field name
+appears once however many values are selected, and the flag parameters name their
+fields instead of repeating `=1`. A comma inside a value is percent-encoded
+(`Ecole%2C+Paris`), so the separator can never be confused with the data. Only the
+sort levels stay one per parameter — packing them would lose their order.
+
+Field names carrying values are prefixed (`f.`, plus a set number for saved sets)
 so they can never collide with the reserved parameters.
 
-Links written before August 2026 used longer names — `title`, `sub`, `sort`/`desc`/
-`last`, and a `__none__` marker. Those are still understood; opening one rewrites it
-in the short form. Example:
+Links written before August 2026 used a longer spelling — a repeated `f.<field>` per
+value, `p.<field>=1`/`m.<field>=1`/`h.<field>=1`, `title`, `sub`, `sort`/`desc`/
+`last`, and a `__none__` marker. Those are all still understood; opening one rewrites
+it in the short form. Example:
 
 ```
-?file=top5-approach/authors.json&q=harvard&ps=all&m.phd_year=1&f.status=verified&f.status=student&f.research_field=applied
+?file=top5-approach/authors.json&q=harvard&ps=all&m=phd_year&f.status=verified,student&f.research_field=applied
 ```
 
 → load `authors.json`, show all matches for the search "harvard" among
