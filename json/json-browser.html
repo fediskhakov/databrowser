@@ -90,6 +90,22 @@
   .side .actions{display:flex;gap:6px;margin:4px 4px 6px}
   .sortbox{margin:0 4px 2px}
   .sortbox select{width:100%}
+  /* saved filter sets, OR-ed with each other and with whatever is in the panels */
+  #clauses{margin:0 4px 6px}
+  #clauses .chead{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:2px 0 3px}
+  .clause{display:flex;gap:6px;align-items:flex-start;background:var(--accent-soft);
+          border:1px solid #d6e2fb;border-radius:8px;padding:4px 6px;margin-bottom:4px;font-size:12px}
+  .clause+.clause{margin-top:-1px}
+  .clause .cbits{flex:1 1 auto;min-width:0;line-height:1.4;word-break:break-word}
+  .clause .ck{color:var(--muted)}
+  .clause .cand{color:var(--muted);font-style:italic}
+  .clause .cnums{flex:none;display:flex;gap:7px;padding-top:1px;color:var(--muted);
+                 font-variant-numeric:tabular-nums}
+  .clause .cdel{font-weight:600}          /* what removing it would cost */
+  .clause .cx{flex:none;border:none;background:none;color:var(--muted);cursor:pointer;
+              font-size:13px;line-height:1;padding:1px 3px;border-radius:4px}
+  .clause .cx:hover{background:#fff;color:var(--no)}
+  #orFilter:disabled{opacity:.45;cursor:default}
   /* options block */
   .opts{display:flex;flex-direction:column;gap:8px;border:1px solid var(--line);border-radius:8px;padding:9px;background:#fff}
   .opts label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted)}
@@ -187,7 +203,9 @@
     <div class="actions">
       <button class="mini" id="resetFilters">Reset filters</button>
       <button class="mini" id="collapseAll">Collapse all</button>
+      <button class="mini" id="orFilter" title="Save these filters and start a new set — records matching ANY saved set are shown">OR</button>
     </div>
+    <div id="clauses"></div>
     <div id="filters"></div>
 
     <div class="spacer"></div>
@@ -256,7 +274,8 @@ const state = {
   fields:[], scalarFields:[], complexFields:[],
   values:{}, missCount:{}, presCount:{},
   facetVal:{}, facetMiss:{}, facetPres:{},   // live, recomputed each apply()
-  filters:{},            // field -> {vals:Set, missing:bool, present:bool}
+  filters:{},            // field -> {vals:Set, missing:bool, present:bool}   (the live set)
+  clauses:[],            // saved filter sets, OR-ed with each other and with the live one
   search:"", pageSize:100, page:0, sortField:"", sortDesc:false, sortLast:false,
   titleSel:null, subSel:null, viewMode:"cards",
   hidden:new Set(),      // fields switched off in the metadata panel (display only)
@@ -545,10 +564,10 @@ function setRecordSource(key, keepSearch){
   analyze();
   state.titleSel=null; state.subSel=null; state.imageSel=null;
   state.sortField=""; state.sortDesc=false; state.sortLast=false;
-  state.hidden.clear();                                           // field names differ per array
+  state.hidden.clear(); state.clauses=[];                         // field names differ per array
   state.page=0; if(!keepSearch){ state.search=""; $("#globalSearch").value=""; }
   populateFieldSelects();
-  renderMeta(); renderFilters(); apply();
+  renderMeta(); renderFilters(); renderClauses(); apply();
 }
 
 /* ---------- metadata ---------- */
@@ -724,6 +743,47 @@ function toggleAllValues(k,on,det){
 }
 function markActive(det){ const f=state.filters[det.dataset.field]; det.dataset.active=(f.vals.size||f.missing||f.present)?"1":"0"; }
 
+/* ---------- saved clause summaries ---------- */
+function describeTerm(k,f){
+  const bits=[...f.vals].map(esc);
+  if(f.present) bits.push("not missing");
+  if(f.missing) bits.push("missing");
+  return '<span class="ck">'+esc(k)+':</span> '+bits.join(" / ");   // values within a field are OR-ed
+}
+function renderClauses(){
+  const box=$("#clauses");
+  box.innerHTML = state.clauses.length
+    ? '<div class="chead">saved filters — any of these</div>'+
+      state.clauses.map((c,i)=>
+        '<div class="clause"><button class="cx" data-clause="'+i+'" title="Remove this filter set">✕</button>'+
+        '<span class="cbits">'+c.terms.map(([k,f])=>describeTerm(k,f)).join(' <span class="cand">and</span> ')+
+        '</span><span class="cnums"><span class="ctot"></span><span class="cdel"></span></span></div>').join("")
+    : "";
+  const b=$("#orFilter");
+  b.disabled=!liveClause();          // nothing to save yet
+}
+/* apply() tallies the counts; this writes them into the chips already on screen.
+   Two numbers, because they answer different questions: how big is this set, and
+   what would removing it cost. They differ exactly when sets overlap. */
+function paintClauseCounts(){
+  document.querySelectorAll("#clauses .clause").forEach((el,i)=>{
+    const t=el.querySelector(".ctot"), d=el.querySelector(".cdel"); if(!t||!d) return;
+    const u=(state.clauseUniq||[])[i]||0, h=(state.clauseHits||[])[i]||0;
+    t.textContent=h.toLocaleString();
+    t.title=h.toLocaleString()+" records match this set, whether or not another filter also shows them";
+    d.textContent="×"+u.toLocaleString();
+    d.title=u.toLocaleString()+" records would disappear if this set were removed"+
+      (u<h ? "; the other "+(h-u).toLocaleString()+" are shown by another filter too" : "");
+  });
+}
+function clearLiveFilters(){
+  for(const k in state.filters){ const f=state.filters[k]; f.vals.clear(); f.missing=false; f.present=false; }
+  document.querySelectorAll(".ffield").forEach(d=>{
+    d.dataset.active="0";
+    const b=d.querySelector(".fbody"); if(b){ b.dataset.rendered="0"; if(d.open) renderFieldBody(d); }
+  });
+}
+
 /* ---------- filtering + paging ---------- */
 function fieldActive(f){ return !!(f && (f.vals.size||f.missing||f.present)); }
 function fieldOK(r,k,f){                      // does r satisfy field k's filter?
@@ -741,13 +801,49 @@ function searchOK(r){
     if(s.toLowerCase().includes(q)) return true; }
   return false;
 }
-function recordMatches(r){
+/* ---------- saved filter sets (clauses) ----------
+   Pressing OR snapshots the panels into a clause and clears them, so the next set
+   can be built. A clause keeps the usual meaning inside itself — OR within a
+   field, AND across fields — and the clauses are OR-ed with each other and with
+   whatever is currently in the panels. A clause is static: unlike a live filter it
+   is not suspended when its field is switched off, because it no longer belongs to
+   that panel. The search box is never snapshotted; it narrows the whole union. */
+function makeClause(spec){
+  const byField={};
+  const term=k=>byField[k]||(byField[k]={vals:new Set(),missing:false,present:false});
+  for(const k in spec.f||{}) for(const v of spec.f[k]) term(k).vals.add(v);
+  for(const k of spec.p||[]) term(k).present=true;
+  for(const k of spec.m||[]) term(k).missing=true;
+  return {terms:Object.entries(byField)};      // [k, {vals,missing,present}] — what fieldOK wants
+}
+function liveClause(){                         // the panels, as a clause spec; null if nothing set
+  const spec={f:{},p:[],m:[]};
+  let any=false;
+  for(const k of state.scalarFields){
+    const f=state.filters[k]; if(!f||state.hidden.has(k)) continue;
+    if(f.vals.size){ spec.f[k]=[...f.vals]; any=true; }
+    if(f.present){ spec.p.push(k); any=true; }
+    if(f.missing){ spec.m.push(k); any=true; }
+  }
+  return any?spec:null;
+}
+const clauseOK = (r,c) => c.terms.every(([k,f])=>fieldOK(r,k,f));
+
+/* live terms are gathered once per apply(), not per record */
+function liveTerms(){
+  const out=[];
   for(const k of state.scalarFields){
     if(state.hidden.has(k)) continue;          // switched off -> its filter is suspended
     const f=state.filters[k];
-    if(fieldActive(f) && !fieldOK(r,k,f)) return false;
+    if(fieldActive(f)) out.push([k,f]);
   }
-  return searchOK(r);
+  return out;
+}
+function recordMatches(r,live){
+  if(!searchOK(r)) return false;               // the search applies to the whole union
+  for(const c of state.clauses) if(clauseOK(r,c)) return true;
+  if(state.clauses.length && !live.length) return false;   // an empty panel adds nothing
+  return live.every(([k,f])=>fieldOK(r,k,f));
 }
 
 /* Honest facets: for each field, the values+counts available given the OTHER
@@ -848,7 +944,22 @@ function cmpRecords(x,y,k,desc,last){
   return desc ? -c : c;
 }
 function apply(){
-  state.filtered=state.records.filter(recordMatches);
+  const live=liveTerms();
+  /* Filter and tally in one pass. For each saved set we count the records it puts
+     on screen that nothing else does — remove that set and exactly those disappear
+     — plus, for the tooltip, how many it matches in all. */
+  const cs=state.clauses, n=cs.length;
+  const uniq=new Array(n).fill(0), hits=new Array(n).fill(0);
+  state.filtered=state.records.filter(r=>{
+    if(!searchOK(r)) return false;                       // the search applies to everything
+    let matched=0, only=-1;
+    for(let i=0;i<n;i++) if(clauseOK(r,cs[i])){ hits[i]++; only=(++matched===1)?i:-1; }
+    const liveHit = (n && !live.length) ? false : live.every(([k,f])=>fieldOK(r,k,f));
+    if(only>=0 && !liveHit) uniq[only]++;
+    return matched>0 || liveHit;
+  });
+  state.clauseUniq=uniq; state.clauseHits=hits;
+  paintClauseCounts();
   const sk=sortBy();      // sort the whole result, not just the page; Array#sort is stable
   if(sk) state.filtered.sort((x,y)=>cmpRecords(x,y,sk,state.sortDesc,sortLastWord()));
   computeFacets();
@@ -889,6 +1000,16 @@ function syncURL(){
     if(f.missing) p.append("m."+k,"1");
     for(const v of f.vals) p.append("f."+k, v);
   }
+  /* saved sets are numbered from 1; the live set keeps the unprefixed names, so
+     links made before this feature existed still mean exactly what they did */
+  state.clauses.forEach((c,i)=>{
+    const n=i+1;
+    for(const [k,f] of c.terms){
+      if(f.present) p.append("p"+n+"."+k,"1");
+      if(f.missing) p.append("m"+n+"."+k,"1");
+      for(const v of f.vals) p.append("f"+n+"."+k, v);
+    }
+  });
   for(const k of state.fields) if(state.hidden.has(k)) p.append("h."+k,"1");   // switched-off fields
   const qs=p.toString();
   history.replaceState(null,"", qs?("?"+qs):location.pathname);
@@ -909,12 +1030,25 @@ function restoreFromParams(params){
   const so=params.get("sort");                              // syncFieldUI() below sets the select
   if(so){ state.sortField=so; state.sortDesc=params.get("desc")==="1";
           state.sortLast=params.get("last")==="1"; }
+  const saved={};                                   // clause number -> spec being rebuilt
   for(const [key,val] of params){
-    if(key.startsWith("f.")){ const f=state.filters[key.slice(2)]; if(f) f.vals.add(val); }
-    else if(key.startsWith("p.")){ const f=state.filters[key.slice(2)]; if(f) f.present=true; }
-    else if(key.startsWith("m.")){ const f=state.filters[key.slice(2)]; if(f) f.missing=true; }
-    else if(key.startsWith("h.")){ const k=key.slice(2); if(state.fields.includes(k)) state.hidden.add(k); }
+    const m=/^([fpm])(\d*)\.([\s\S]+)$/.exec(key);
+    if(m){
+      const [,kind,num,k]=m;
+      if(!num){                                     // the live set
+        const f=state.filters[k]; if(!f) continue;
+        if(kind==="f") f.vals.add(val); else if(kind==="p") f.present=true; else f.missing=true;
+      }else{                                        // a saved set
+        const s=saved[num]||(saved[num]={f:{},p:[],m:[]});
+        if(kind==="f") (s.f[k]||(s.f[k]=[])).push(val);
+        else if(kind==="p") s.p.push(k); else s.m.push(k);
+      }
+      continue;
+    }
+    if(key.startsWith("h.")){ const k=key.slice(2); if(state.fields.includes(k)) state.hidden.add(k); }
   }
+  state.clauses=Object.keys(saved).sort((a,b)=>a-b).map(n=>makeClause(saved[n]));
+  renderClauses();
   renderMeta();                 // reflect restored field switches / auto-link note
   syncFieldUI();                // and the sidebar's field-dependent controls
   const pg=params.get("page"); if(pg){ state.page=Math.max(0,(+pg||1)-1); }
@@ -1035,7 +1169,20 @@ $("#filters").addEventListener("change",e=>{
   if(cb.dataset.kind==="missing") f.missing=cb.checked;
   else if(cb.dataset.kind==="present") f.present=cb.checked;
   else { if(cb.checked) f.vals.add(cb.dataset.val); else f.vals.delete(cb.dataset.val); }
-  markActive(cb.closest(".ffield")); state.page=0; apply();
+  markActive(cb.closest(".ffield")); renderClauses(); state.page=0; apply();
+});
+
+/* save the panels as a clause and clear them for the next set */
+$("#orFilter").onclick=()=>{
+  const spec=liveClause(); if(!spec) return;
+  state.clauses.push(makeClause(spec));
+  clearLiveFilters();
+  renderClauses(); state.page=0; apply();
+};
+$("#clauses").addEventListener("click",e=>{
+  const b=e.target.closest("button[data-clause]"); if(!b) return;
+  state.clauses.splice(+b.dataset.clause,1);
+  renderClauses(); state.page=0; apply();
 });
 $("#cards").addEventListener("toggle",e=>{
   const d=e.target; if(!d.classList.contains("cf")||!d.open) return;
@@ -1100,9 +1247,10 @@ $("#prev").onclick=()=>{state.page--;apply()};
 $("#next").onclick=()=>{state.page++;apply()};
 $("#last").onclick=()=>{state.page=1e9;apply()};
 $("#resetFilters").onclick=()=>{
-  for(const k in state.filters){ const f=state.filters[k]; f.vals.clear(); f.missing=false; f.present=false; }
-  document.querySelectorAll(".ffield").forEach(d=>{ d.dataset.active="0"; const b=d.querySelector(".fbody"); if(b){ b.dataset.rendered="0"; if(d.open) renderFieldBody(d);} });
+  state.clauses=[];        // saved sets are filters too, so reset clears them as well
+  clearLiveFilters();
   state.search=""; $("#globalSearch").value=""; state.page=0;
+  renderClauses();
   renderMeta();            // no filters left to suspend, so clear those chip markers
   apply();
 };

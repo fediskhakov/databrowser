@@ -121,8 +121,9 @@ fields are shown as collapsible expanders on each card, not as filters.
   prev, page info, `›` next, `»` last). The pager is hidden when *Records per page*
   is `all`.
 - **Left sidebar:** three sections — **Sort** (one dropdown), **Filters** (its
-  **Reset filters** / **Collapse all** buttons, then one collapsible panel per
-  scalar field), and **Display** options at the bottom.
+  **Reset filters** / **Collapse all** / **[OR](#combining-sets-of-filters-with-or)**
+  buttons, any saved filter sets, then one collapsible panel per scalar field), and
+  **Display** options at the bottom.
 - **Main area:** a collapsed **Metadata & dataset info** panel — the data source
   controls, the record-array choice, the field on/off switches, the record count,
   and any non-record top-level keys from the file — then the records as cards.
@@ -212,6 +213,60 @@ Within one field, selected values are **OR**-ed (and OR-ed with the
 missing/present choices). Across different fields, constraints are **AND**-ed. A
 field with an active filter is marked in the list; **Reset filters** clears
 everything including the search.
+
+### Combining sets of filters with OR
+
+The panels express one set of constraints: this value **and** that one **and** the
+other. They cannot express *US economics departments **or** UK business schools* —
+two different combinations at once. The **OR** button does that.
+
+Press it and the current panels are **saved as a set**, summarised above the field
+list, and cleared so you can build the next one:
+
+```
+SAVED FILTERS — ANY OF THESE
+✕  country: United States                  154  ×78
+✕  category: economics_dept                230 ×119
+✕  country: United Kingdom                  37  ×16
+```
+
+Each set carries **two numbers**, because they answer different questions:
+
+| | Meaning |
+|---|---|
+| `154` | how many records **match this set**, whether or not another filter also shows them |
+| `×78` | how many would **disappear if you removed it** — what the ✕ costs |
+
+They are equal when nothing overlaps the set, and differ when something does. Above,
+`country: United States` matches 154 records but only 78 depend on it: the other 76
+are economics departments the second set shows anyway. So the `×` figures never
+double-count the overlap, while the plain counts deliberately do. A set reading `×0`
+is covered entirely by the others and can be removed without changing anything.
+
+Both respect the global search, and both update as you edit the panels — filling in
+the same records live drops a set's `×` to zero while its match count stays put.
+
+A record is shown when it matches **any** saved set — or the set you are currently
+building, which counts as one more, so the list updates as you click. Empty panels
+add nothing, so saving a set never changes what is on screen by itself. Each set is
+static: **✕** removes it, and nothing else edits it.
+
+Two things stay outside the sets:
+
+- the **global search**, which narrows whatever the combination produced, so one
+  search box applies to all of them;
+- the **facet counts** in the panels, which keep describing the set you are
+  building. A value already covered by a saved set still shows its real count, so
+  the panels remain usable for composing the next set.
+
+A saved set keeps applying even if one of its fields is later
+[switched off](#switching-fields-on-and-off) — unlike a live filter, which is
+suspended — because it no longer belongs to that panel.
+
+Saved sets are numbered in the URL (`f1.<field>`, `p1.<field>`, `m1.<field>` for
+the first, `f2.…` for the second), while the set in the panels keeps the
+unprefixed `f.`/`p.`/`m.` names. Links made before this feature existed therefore
+still mean exactly what they did.
 
 ### Honest (responsive) faceting
 
@@ -626,10 +681,11 @@ short):
 | `f.<field>=<value>` | A selected value for `<field>` (repeated for multiple values) |
 | `p.<field>=1` | The "not missing" checkbox for `<field>` |
 | `m.<field>=1` | The "missing" checkbox for `<field>` |
+| `f<n>.<field>` `p<n>.<field>` `m<n>.<field>` | The same three, for [saved filter set](#combining-sets-of-filters-with-or) `<n>` (numbered from 1) |
 | `h.<field>=1` | `<field>` is switched off — hidden from the records and its filter suspended (see [the metadata panel](#switching-fields-on-and-off)) |
 
-Field names are prefixed (`f.`/`p.`/`m.`/`h.`) so they can never collide with the
-reserved parameters. Example:
+Field names are prefixed (`f.`/`p.`/`m.`/`h.`, plus a set number for saved sets)
+so they can never collide with the reserved parameters. Example:
 
 ```
 ?file=top5-approach/authors.json&q=harvard&ps=all&m.phd_year=1&f.status=verified&f.status=student&f.research_field=applied
