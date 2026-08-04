@@ -57,6 +57,21 @@ const ok=(c,m)=>{ if(c) pass++; else { fail++; console.log("  FAIL "+m); } };
        b=document.querySelector('#orFilter').getBoundingClientRect();
        return b.bottom<=a.bottom+0.5 && b.top>=a.top-0.5; })()`), "and the OR button sits inside the row");
 
+  /* renderClauses() is the only writer of the disabled state, and the metadata
+     panel's field switches change whether there is anything to save — suspending
+     the only filter, or reviving it — without going through the filter handlers. */
+  console.log("\n== the disabled state follows the field switches ==");
+  await ev(`(()=>{const b=document.querySelector('[data-fieldtog="country"]');
+             b.checked=false; b.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+  await sleep(400);
+  ok(await ev(`document.querySelector('#orFilter').disabled`),
+     "switching the filtered field off disables it — its filter is suspended, so there is nothing to save");
+  await ev(`(()=>{const b=document.querySelector('[data-fieldtog="country"]');
+             b.checked=true; b.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+  await sleep(400);
+  ok(await ev(`!document.querySelector('#orFilter').disabled`),
+     "switching it back on enables it again, without having to touch another filter");
+
   console.log("\n== the button still works ==");
   await ev(`document.querySelector('#orFilter').click()`);
   await sleep(400);

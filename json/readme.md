@@ -48,9 +48,11 @@ doesn't.
   shareable.
 - **Drag and drop** a `.json` file anywhere on the window.
 
-With no `?file=` the app starts blank; there is no default dataset. The page sends
-`Cache-Control: no-cache`, so a refresh always re-reads both the data and the
-viewer — handy while a dataset is being regenerated.
+With no `?file=` the app starts blank; there is no default dataset. A `?file=` that
+cannot be fetched — wrong path, 404, CORS — says so on the start page instead of
+looking like a link that was never given. The data is fetched with `no-store`, so a
+refresh always re-reads it, handy while a dataset is being regenerated; the viewer
+itself is cached like any other page, so hard-refresh it after editing.
 
 ## Records and fields
 
@@ -142,7 +144,9 @@ Each switched-on scalar field gets a collapsible panel:
   never changes a panel's ordering rule. Many-valued fields get a type-ahead; the
   list shows at most 1000 entries, though a value you have checked always stays
   visible;
-- **all** / **none** to bulk toggle.
+- **all** / **none** to bulk toggle. They act on every value the panel is offering,
+  including any beyond the 1000 the list draws, and on exactly what the type-ahead
+  has narrowed it to.
 
 Within a field values are **OR**-ed; across fields, **AND**-ed. **Reset filters**
 clears everything, saved sets and search included.
@@ -345,8 +349,13 @@ Tick one and a bar appears at the right of the header, the search box giving up 
 width for it:
 
 ```
-                                            2 selected  ✕  [⧉S]  [⧉F]
+                                   ▣ page  2 selected  ✕  [⧉S]  [⧉F]
 ```
+
+The **page** box is that double-click as an ordinary control — for touch, which has
+no double-click, and for the keyboard, which cannot make one. It reads like the
+header checkbox of a table: ticked when the whole page is selected, part-way when
+only some of it is, and clicking it takes or gives back the page.
 
 The two blue buttons copy the selected records to the clipboard: **S** is the
 *short* copy — plain text, carrying only the fields you
@@ -420,10 +429,14 @@ into still gets something readable. That text is the *full* record — the short
 copy's field choice belongs to **S** alone, and applying it here would let a paste
 into a plain editor arrive narrowed, or empty.
 
-Copying needs a **secure context** — `https://`, or the `127.0.0.1` that
-`serve-json.sh` gives you. Over plain `http://` to another host, or from `file://`,
-the viewer falls back to the older copy path; if even that is refused the button
-flashes red instead of green.
+The modern clipboard API needs a **secure context** — `https://`, the `127.0.0.1`
+that `serve-json.sh` gives you, and, as it happens, `file://`, which browsers also
+count as trustworthy. Over plain `http://` to another host it is unavailable and the
+viewer falls back to the older copy path, which reaches the same two flavors; if even
+that is refused the button flashes red instead of green. Either way the result is
+also announced in words — "Copied 2 records as text" — through a live region, since
+a colour is no use to a screen reader and green against red is the pair colourblind
+readers most often cannot separate.
 
 ---
 
@@ -481,10 +494,15 @@ hand them to the browser.
 
 ## Notes & limits
 
-- Built for "browse and slice"; comfortable into the tens of thousands of records.
+- Built for "browse and slice", and comfortable well past the tens of thousands.
   Filtering and faceting are roughly `O(records × active filters)` per change, and
-  the search box waits for a pause in typing on large datasets.
+  the search box waits for a pause in typing on large datasets. Work is only redone
+  when its inputs change: paging, and any other change that alters neither what
+  matches nor the order, reuse what is already computed. Measured on 100,000 records
+  × 10 fields: a page turn ~3 ms, a filter change 35–235 ms, changing the sort
+  ~150–180 ms. A million records is another matter — sorting one is seconds.
 - The per-field value list shows at most 1000 entries — narrow with the type-ahead.
+  Only the drawing is capped: **all** / **none** still take the whole list.
 - A "scalar" field must be scalar in **every** record, or it is treated as nested.
 - Identifier, image and long-text detection are heuristics keyed on value shape and
   English-language field names; each has an escape hatch (a `LINKERS` row, the image
@@ -513,4 +531,6 @@ Fixtures, each exercising one rule and its near-misses:
 `messy-test.json` (hostile shapes: a primitive among the records, a `__proto__`
 field name, an empty field name, mixed arrays),
 `copy-test.json` (everything the two copy buttons have to render: subtitle,
-identifier, collapsed URL, thumbnail, long text, empty field, nested arrays).
+identifier, collapsed URL, thumbnail, long text, empty field, nested arrays),
+`many-test.json` (1100 distinct values in one field — one more than a filter panel
+draws, so **all** has something to reach past).

@@ -316,6 +316,30 @@ const ok=(c,m)=>{ if(c) pass++; else { fail++; console.log("  FAIL "+m); } };
   ok(!(await ev(`document.querySelector('#copyShort').classList.contains('ok')`)),
      "the confirmation fades on its own");
 
+  console.log("\n== the fallback path, which plain http:// is the only user of ==");
+  /* Headless Chrome on 127.0.0.1 is a secure context, so the async API always wins
+     and legacyCopy() has never run in a test. Take ClipboardItem away and it is the
+     only path left — the same one a page served over plain http to another host
+     gets, where window.isSecureContext is false. */
+  await ev(`window.__CI=window.ClipboardItem; delete window.ClipboardItem`);
+  ok(await ev(`!window.ClipboardItem`), "with ClipboardItem gone");
+  await ev(`document.querySelector('#copyShort').click()`,true); await sleep(500);
+  await ev(`window.ClipboardItem=window.__CI`);                  // restore before reading it back
+  ok(await ev(`document.querySelector('#copyShort').classList.contains('ok')`),
+     "the short copy still reports success");
+  const ls = JSON.parse(await ev(clip));
+  ok(ls.text===await ev(`selectionText()`), "and the clipboard holds the same text");
+  await ev(`window.__CI=window.ClipboardItem; delete window.ClipboardItem`);
+  await ev(`document.querySelector('#copyFull').click()`,true); await sleep(500);
+  await ev(`window.ClipboardItem=window.__CI`);
+  ok(await ev(`document.querySelector('#copyFull').classList.contains('ok')`),
+     "so does the full one");
+  const lf = JSON.parse(await ev(clip));
+  ok(lf.types==="text/plain|text/html",
+     `and it still reaches BOTH flavors through the copy event: ${lf.types}`);
+  ok(lf["text/html"].includes("border:1px solid"), "the HTML one is the styled cards");
+  ok(lf.text===await ev(`selectionText(true)`), "the plain one the full text");
+
   console.log("\n== full-width view ==");
   await ev(`document.querySelector('#viewMode').value='full';
             document.querySelector('#viewMode').dispatchEvent(new Event('change',{bubbles:true}))`);
@@ -363,6 +387,45 @@ const ok=(c,m)=>{ if(c) pass++; else { fail++; console.log("  FAIL "+m); } };
      "the other records were never touched");
   ok((await ev(`document.querySelector('#cards .selbox').title`)).includes("double-click"),
      "the box's tooltip says so");
+
+  console.log("\n== the same gesture, for touch and the keyboard ==");
+  /* double-click does not exist on touch and cannot be typed; the box in the bar is
+     the way in for both, and must stay in step with the cards */
+  await ev(`document.querySelector('#selClear').click()`); await sleep(200);
+  await tick(1); await sleep(200);
+  ok(await ev(`document.querySelector('#selPage').indeterminate`),
+     "with part of the page selected it shows part-way");
+  ok(!(await ev(`document.querySelector('#selPage').checked`)), "not ticked");
+  await ev(`(()=>{const b=document.querySelector('#selPage');
+             b.checked=true; b.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+  await sleep(300);
+  ok(await nsel()===3, "ticking it takes the whole page, as the double-click does");
+  ok(!(await ev(`document.querySelector('#selPage').indeterminate`)) &&
+     await ev(`document.querySelector('#selPage').checked`), "and it now reads as fully ticked");
+  await ev(`(()=>{const b=document.querySelector('#selPage');
+             b.checked=false; b.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+  await sleep(300);
+  ok(await nsel()===0, "unticking gives the page back");
+  await dbl(0); await sleep(250);
+  ok(await ev(`document.querySelector('#selPage').checked`),
+     "and a double-click on a card updates the box in the bar too");
+  ok(await ev(`document.querySelector('#selCount').getAttribute('aria-live')`)==="polite",
+     "the count is announced as it changes");
+
+  console.log("\n== the copy result is said in words, not only in colour ==");
+  await ev(`document.querySelector('#copyShort').click()`,true); await sleep(400);
+  const said = await ev(`document.querySelector('#copyStatus').textContent`);
+  ok(said.startsWith("Copied 3 records as text"), `the short copy announces itself: ${JSON.stringify(said)}`);
+  ok(await ev(`document.querySelector('#copyStatus').getAttribute('role')`)==="status" &&
+     await ev(`document.querySelector('#copyStatus').getAttribute('aria-live')`)==="polite",
+     "through a live region");
+  ok(await ev(`document.querySelector('#copyStatus').getBoundingClientRect().width`)<2,
+     "which is never shown on screen");
+  ok(!(await ev(`document.querySelector('#copyStatus').closest('[hidden]')`)),
+     "and sits outside the bar, which is hidden between copies");
+  await ev(`document.querySelector('#copyFull').click()`,true); await sleep(400);
+  ok((await ev(`document.querySelector('#copyStatus').textContent`)).includes("with formatting"),
+     "the full copy says which kind it was");
 
   console.log("\n== clearing ==");
   await ev(`document.querySelector('#selClear').click()`); await sleep(200);

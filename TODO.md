@@ -1,10 +1,12 @@
 # TODO — rectifying the review findings
 
 Work plan derived from [json-browser-review.md](json-browser-review.md) (reviewed
-2026-08-04). Section numbers below reference that report. Nothing here is started.
+2026-08-04). Section numbers below reference that report.
 
-Line numbers refer to `json/json-browser.html` as of the review; re-locate by symbol
-if the file has moved on.
+**Status, 2026-08-05: everything below is done except 2.2, which the measurements
+argue against — see the note under it. The suite is at 941 assertions across 14
+suites, up from 865 across 12.** Kept as the record of what was changed and why;
+the line numbers are from before the work and no longer point where they did.
 
 ---
 
@@ -12,7 +14,7 @@ if the file has moved on.
 
 Self-contained, roughly one commit. Closes the only crasher.
 
-### 1.1 Prototype patch (report §1.1, §1.2) — small
+### 1.1 Prototype patch (report §1.1, §1.2) — small — DONE
 
 Three tables keyed by field name use a plain `{}` where the rest of the file uses
 `bare()` = `Object.create(null)`. Assigning a key called `__proto__` sets the
@@ -40,7 +42,7 @@ field; open that field's facet panel and assert no phantom `[object Object]` val
 round-trip `f1.__proto__=x` through the URL. The fixture already carries the field —
 this is the gap that let both bugs through.
 
-### 1.2 Boot error handling (report §1.6) — small
+### 1.2 Boot error handling (report §1.6) — small — DONE
 
 The boot IIFE (`:1805-1824`) wraps fetch, parse, `restoreFromParams` and `apply` in
 one bare `catch`, then force-shows the empty state even when cards have already
@@ -53,7 +55,7 @@ rendered. Split it:
 This also downgrades §1.1's second symptom from "half-dead page" to "page works, one
 filter did not restore", which is the right failure mode for any future restore bug.
 
-### 1.3 `toggleAllValues` past the 1000-row cap (report §1.3) — small
+### 1.3 `toggleAllValues` past the 1000-row cap (report §1.3) — small — DONE
 
 `toggleAllValues` (`:886-890`) walks the checkboxes in the DOM; `paintVals`
 (`:869-885`) caps rendering at 1000 rows. On a field with more distinct values,
@@ -68,12 +70,12 @@ upstream of the slice and are preserved.
 Update `json/readme.md:144`, which currently describes **all** / **none** without
 mentioning the cap.
 
-### 1.4 Stale OR button (report §1.4) — trivial
+### 1.4 Stale OR button (report §1.4) — trivial — DONE
 
 `renderClauses()` is the only writer of `#orFilter.disabled` (`:909-910`). Call it
 from the metadata field-toggle handlers (`:1682`, `:1717`) and `pickField` (`:1747`).
 
-### 1.5 Readme corrections (report §1.5) — trivial
+### 1.5 Readme corrections (report §1.5) — trivial — DONE
 
 - `json/readme.md:51-53` — the `Cache-Control` claim. It is a `<meta http-equiv>`,
   which browsers ignore for HTTP caching; the data is re-read because of
@@ -86,7 +88,7 @@ from the metadata field-toggle handlers (`:1682`, `:1717`) and `pickField` (`:17
 
 ## Stage 2 — Performance
 
-### 2.1 Stop redoing work in `apply()` (report §2.3) — medium; the big win
+### 2.1 Stop redoing work in `apply()` (report §2.3) — medium; the big win — DONE
 
 `apply()` (`:1121`) re-runs search, re-filters, **re-sorts from scratch** and
 recomputes all facets on every call, including a mere page turn (~220 ms per page
@@ -113,7 +115,23 @@ incremented inside the guarded blocks; the page suite asserts a page turn increm
 none of them while the rendered cards still change. Cheaper and far more durable
 than a timing assertion.
 
-### 2.2 Precompute sort keys (report §2.3) — medium
+**Done.** `rowsSig()` / `sortSig()` in `apply()`, with `state.stats` counting what
+actually ran and `test-apply` asserting the contract in both directions. Two things
+the plan did not foresee:
+
+- `state.hidden` had to enter the signature in its own right, not merely through
+  `liveTerms()`. A field switched off has no facets computed for it, so one coming
+  back needs them built even though nothing about which records match has changed.
+- The filter pass now produces `state.base` in file order and the sort stage derives
+  `state.filtered` from it. Sorting in place worked only because the filter pass used
+  to rebuild the array every time; once it stopped, `(file order)` could no longer
+  give the data back as it came. Two existing assertions caught this immediately.
+
+Measured, 100,000 records × 10 fields, real page: **page turn ~220 ms → 2.6 ms**.
+`rowsSig()` itself is below timer resolution. A filter change costs 35–235 ms and
+changing the sort 150–180 ms.
+
+### 2.2 Precompute sort keys (report §2.3) — medium — NOT DONE, deliberately
 
 `cmpVals` does two numeric coercions per comparison and `lastWord` does a
 `String.split` per comparison, O(n log n) times (`:1104-1120`).
@@ -128,14 +146,19 @@ precompute `{missing, num, str, lastStr}`, then compare precomputed keys.
 identical to `state.filtered.sort(cmpMulti)`. That pins the two together
 permanently while the existing comparator assertions keep guarding the semantics.
 
-**Do 2.1 first.** It removes most of the pain; 2.2 is only worth its risk if
-re-sorting still shows up afterwards.
+**The gate was "only if re-sorting still shows up after 2.1". It does not.** With
+the guard in place a sort only runs when the sort actually changes, and that costs
+150–180 ms at 100k — an explicit, deliberate action, once, not per keystroke and no
+longer per page turn. At the documented scale (tens of thousands) it is 15–20 ms.
+Rewriting how the comparators are driven, for a 2–4× improvement on that, buys less
+than it risks. Left here with the design intact in case a 1M-record dataset ever
+makes it worth doing.
 
 ---
 
 ## Stage 3 — Coverage and reach
 
-### 3.1 Test the legacy copy path (report §1.10, §3.2) — small
+### 3.1 Test the legacy copy path (report §1.10, §3.2) — small — DONE
 
 `legacyCopy` (`:1583-1600`) is what every plain-`http://` user gets, and no test
 touches it: headless Chrome on `127.0.0.1` always takes the async path.
@@ -148,7 +171,7 @@ suite already does this), assert both flavors arrive, then restore. No need to f
 If a Safari is available, click S and F there once by hand. It is the newest
 feature's only untested tier.
 
-### 3.2 Bulk select for touch and keyboard (report §1.11, §3.2) — medium
+### 3.2 Bulk select for touch and keyboard (report §1.11, §3.2) — medium — DONE
 
 Double-click is the only way to select a page (`:1647`), and double-click does not
 exist on touch — an iPad user cannot bulk-select at all, which is exactly where

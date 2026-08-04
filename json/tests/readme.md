@@ -41,15 +41,18 @@ specificity, event delegation, layout at a given viewport.
 | `test-url` | unit | the URL writer and reader round-tripping, packing, old spellings |
 | `test-numsort` | unit | numeric-column detection and facet value ordering |
 | `test-interaction` | page | the bulk of the UI: filters, facets, OR sets, sorting, paging, mobile layout |
-| `test-messy` | page | hostile JSON — `messy-test.json`: a primitive among the records, a `__proto__` field name, an empty field name, mixed arrays |
+| `test-messy` | page | hostile JSON — `messy-test.json`: a primitive among the records, a `__proto__` field name, an empty field name, mixed arrays. Filtering on `__proto__`, opening its facet panel and saving it as an OR set are the assertions that matter: prototype-named fields are where presence tests and field-keyed tables go wrong |
+| `test-boot` | page | a `?file=` that 404s says why instead of showing a blank start page; **all** / **none** act on every value the panel offers rather than the 1000 rows it drew (`many-test.json`) |
+| `test-apply` | page | the work `apply()` is allowed to skip: a page turn re-sorts, re-filters and re-facets nothing, and every real change — filters, search, field switches, sort levels, saved sets, record source — is still picked up. Asserted against `state.stats`, not a stopwatch |
 | `test-ortip` | page | the OR button's help tooltip stays reachable while the button is disabled |
 | `test-numfacet` | page | numeric facet ordering as it reaches the screen, including under a live filter |
-| `test-select` | page | the select boxes and the two copy buttons: where the box lands, double-click taking the page, the bar appearing, selection surviving filter/sort/page, copies following the page's sort even for records the filters hide, both copy formats, and the short-copy field row (heading included) round-tripping through `h2` |
+| `test-select` | page | the select boxes and the two copy buttons: where the box lands, double-click and the **page** box both taking the page, the bar appearing, selection surviving filter/sort/page, copies following the page's sort even for records the filters hide, both copy formats, the short-copy field row (heading included) round-tripping through `h2`, and the `execCommand` fallback — reached by deleting `window.ClipboardItem`, since headless Chrome on `127.0.0.1` would otherwise always take the async path |
 | `test-describe` | page | the filter pane's **⧉** button: the description's three shapes (nothing set, panels only, saved OR sets), that a suspended filter is never described, and that the clipboard gets exactly what was described |
 
 Fixtures live one level up beside the viewer, so the same server serves both:
 `link-test.json`, `image-test.json`, `sort-test.json`, `text-test.json`,
-`messy-test.json`, `copy-test.json`, and the real `econ_departments.json`.
+`messy-test.json`, `copy-test.json`, `many-test.json`, and the real
+`econ_departments.json`.
 
 ## Two traps worth knowing
 

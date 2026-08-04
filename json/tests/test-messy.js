@@ -52,6 +52,47 @@ const ok = (c, m) => { if(c) pass++; else { fail++; console.log("  FAIL " + m); 
   ok(await ev(`Object.keys(state.meta).includes("__proto__")`),
      "and the key itself survives as an ordinary own property");
 
+  /* The two bugs the earlier assertions walked straight past: presence tested with
+     `k in r` reports Object.prototype as the value of every record WITHOUT the key,
+     and a clause table keyed with a plain {} takes __proto__ as its prototype
+     instead of a key. Only opening the panel and pressing OR reaches them. */
+  console.log("\n== __proto__ as a field you can actually filter on ==");
+  await ev(`document.querySelector('.ffield[data-field="__proto__"]').open = true`);
+  await sleep(300);
+  const pvals = await ev(`JSON.stringify([...document.querySelectorAll('.ffield[data-field="__proto__"] .vtxt')]
+                            .map(e => e.textContent))`);
+  ok(JSON.parse(pvals).length === 2, `only the two real values are offered: ${pvals}`);
+  ok(!pvals.includes("[object Object]"),
+     "no phantom value from the record that has no __proto__ key");
+  ok(await ev(`state.presCount["__proto__"]`) === 2 && await ev(`state.missCount["__proto__"]`) === 4,
+     "two records have it, four do not — counted by own property, not by inheritance");
+  await ev(`document.querySelector('.ffield[data-field="__proto__"] input[data-val="proto-again"]').click()`);
+  await sleep(350);
+  ok(await ev(`+document.querySelector('#resCount').textContent`) === 1,
+     "filtering on it selects the one record");
+
+  console.log("\n== and one you can save as an OR set ==");
+  ok(await ev(`!document.querySelector('#orFilter').disabled`), "OR is offered");
+  await ev(`document.querySelector('#orFilter').click()`);
+  await sleep(400);
+  ok(await ev(`state.clauses.length`) === 1, "the set is saved");
+  ok(await ev(`JSON.stringify(state.clauses[0].terms.map(t => t[0]))`) === '["__proto__"]',
+     "on the field itself — not on a phantom field named 0, its prototype's indices");
+  ok(await ev(`+document.querySelector('#resCount').textContent`) === 1,
+     "and it still matches its one record");
+  const purl = await ev(`decodeURIComponent(location.search)`);
+  ok(purl.includes("f1.__proto__=proto-again"), `the URL names the field: ${purl}`);
+  /* reloading is where the restore path took the same wrong turn */
+  await send("Page.navigate", {url: await ev(`location.href`)});
+  for(let i = 0; i < 60; i++){ await sleep(200);
+    if(await ev(`typeof state !== 'undefined' && document.querySelectorAll('#cards .card').length`)) break; }
+  ok(await ev(`state.clauses.length`) === 1 && await ev(`+document.querySelector('#resCount').textContent`) === 1,
+     "and the link reopens to the same one record");
+  ok(await ev(`document.querySelector('#emptyState').style.display`) !== "block",
+     "with no 'No JSON loaded' laid over the cards");
+  await ev(`state.clauses=[]; renderClauses(); apply()`);
+  await sleep(300);
+
   console.log("\n== filtering and sorting over the messy set ==");
   await ev(`document.querySelector('.ffield[data-field="name"]').open = true`);
   await sleep(300);

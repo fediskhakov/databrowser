@@ -59,6 +59,11 @@
   .selbar{display:flex;gap:6px;align-items:center;margin-left:auto}
   .selbar[hidden]{display:none}       /* .selbar's display would otherwise outrank [hidden] */
   .selcount{font-size:12px;color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+  .selpage{display:inline-flex;gap:4px;align-items:center;font-size:12px;color:var(--muted);
+           cursor:pointer;user-select:none;white-space:nowrap}
+  .selpage input{margin:0;accent-color:var(--accent);cursor:pointer}
+  /* announced, never shown: the visible signal is the button's own flash */
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
   .selclear{padding:3px 8px;line-height:1.15;color:var(--muted)}
   .selclear:hover{color:var(--no)}
   .copybtn{padding:4px 8px;display:inline-flex;align-items:center}
@@ -219,6 +224,9 @@
   .empty button{margin-top:10px}
   .empty .loaders{display:flex;flex-direction:column;gap:8px;max-width:320px;margin:14px auto 0;text-align:left}
   .empty .loaders button{margin-top:0}
+  /* why the file named in ?file= never arrived — the alternative is a blank page
+     that looks the same whether the link was wrong or no link was given at all */
+  .loaderr{max-width:460px;margin:10px auto 0;color:var(--no);word-break:break-word}
   #emptyUrlLoad{background:#0d9488;border-color:#0d9488}        /* teal: load by URL */
   #emptyUrlLoad:hover{background:#0f766e;border-color:#0f766e}
   #emptyLoad{background:var(--accent);border-color:var(--accent)}  /* blue: load file */
@@ -243,7 +251,12 @@
          S is the short copy — plain text, and only the fields picked in the metadata
          panel. F is the full one — every field the card shows, as rich HTML. -->
     <span class="selbar" id="selbar" hidden>
-      <span class="selcount" id="selCount"></span>
+      <!-- what double-clicking a select box does, for the keyboard and for touch,
+           where there is no double-click at all -->
+      <label class="selpage" title="Select every card on this page, or clear them">
+        <input type="checkbox" id="selPage"><span>page</span>
+      </label>
+      <span class="selcount" id="selCount" aria-live="polite"></span>
       <button class="selclear" id="selClear" title="Clear the selection">✕</button>
       <button class="primary copybtn" id="copyShort"
               title="Short copy — the selected records as text, with the fields chosen under Metadata">
@@ -334,6 +347,7 @@ Each saved set shows how many records it matches, and after × how many would di
     <div id="cards" class="grid"></div>
     <div id="emptyState" class="empty" style="display:none">
       <div>No JSON loaded.</div>
+      <div id="emptyErr" class="loaderr" style="display:none"></div>
       <div class="loaders">
         <input type="url" id="emptyUrlInput" placeholder="https://…/data.json" autocomplete="off">
         <button class="primary" id="emptyUrlLoad">Load JSON from URL</button>
@@ -344,6 +358,10 @@ Each saved set shows how many records it matches, and after × how many would di
   </main>
 </div>
 <div id="drop">Drop JSON file to load</div>
+<!-- the clipboard's own confirmation is a colour flash; this says the same thing in
+     words, for a screen reader and for anyone who cannot tell the two colours apart.
+     Outside the selection bar, which is hidden between copies. -->
+<span id="copyStatus" class="sr" role="status" aria-live="polite"></span>
 
 <script>
 "use strict";
@@ -351,9 +369,17 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const NULLKEY = "(null)";
 const isMissing = v => v===null || v===undefined || v==="";
-/* `k in r` throws on a primitive, and a records array may hold anything at all */
+/* a records array may hold anything at all, and `in` throws on a primitive */
 const isRec = r => !!r && typeof r==="object";
 const bare = () => Object.create(null);      // a lookup table safe to key by field name
+/* Reading a field by name, own properties only. `k in r` and a bare `r[k]` both
+   walk the prototype chain, so a field called __proto__ — or constructor, or
+   toString — would report Object.prototype as the value of every record that does
+   NOT have that key: a phantom facet value, and a phantom row on the card. JSON
+   defines fields as own properties, so nothing legitimate is lost by insisting. */
+const own = Object.prototype.hasOwnProperty;
+const has = (r,k) => isRec(r) && own.call(r,k);
+const val = (r,k) => has(r,k) ? r[k] : undefined;
 const valKey = v => (v===null||v===undefined) ? NULLKEY : String(v);
 
 const state = {
@@ -374,7 +400,12 @@ const state = {
      sorting and paging then cost the selection nothing. Deliberately not in the URL. */
   selected:new Set(),
   shortOff:new Set(),    // fields left out of the short copy (URL: h2), as hidden is of the page
-  filtered:[], pageItems:[], restoring:false
+  base:[],               // what matches, in file order; filtered is this, ordered
+  filtered:[], pageItems:[], restoring:false,
+  /* apply() skips the work whose inputs have not changed; these say what it did.
+     Three integers, so the invariant "turning a page re-sorts nothing" is something
+     a test can assert rather than infer from a stopwatch. */
+  dataRev:0, sigRows:null, sigSort:null, stats:{filters:0,sorts:0,facets:0}
 };
 
 /* ---------- identifier auto-linking ----------
@@ -632,7 +663,7 @@ function analyze(){
   const total=state.records.length;
   for(const r of state.records){
     for(const k of state.scalarFields){
-      const has = isRec(r) && (k in r); const v = has? r[k] : undefined;
+      const v = val(r,k);
       if(isMissing(v)){ state.missCount[k]++; }
       else { state.presCount[k]++; const m=state.values[k]; const kk=valKey(v); m.set(kk,(m.get(kk)||0)+1); }
     }
@@ -660,6 +691,7 @@ function loadData(raw, name){
 }
 function setRecordSource(key, keepSearch){
   state.recordKey=key;
+  state.dataRev++;              // different records entirely: nothing apply() cached still holds
   state.records=recordsFor(state.raw,key)||[];
   state.meta=metaFor(state.raw,key);
   analyze();
@@ -883,26 +915,40 @@ function byValue(a,b){
   if(an&&bn) return na-nb; if(an) return -1; if(bn) return 1;
   return a.toLowerCase()<b.toLowerCase()?-1:1;
 }
-function paintVals(det,q){
-  const k=det.dataset.field, vals=det.querySelector(".vals"), checked=state.filters[k].vals;
-  const fmap=fcount("facetVal",k);                  // values available under the OTHER filters
+/* The values a field's panel is offering, in the order it offers them: those still
+   reachable under the OTHER filters, plus any already checked, narrowed by the
+   type-ahead. The list, not the rows — paintVals caps what it draws, and "all" must
+   not inherit that cap. */
+function facetEntries(k,q){
+  const fmap=fcount("facetVal",k), checked=state.filters[k].vals;
   let entries=[...fmap.entries()];
   for(const sel of checked){ if(!fmap.has(sel)) entries.push([sel,0]); }  // keep checked visible
   entries=sortVals(entries,k);
   if(q){ const ql=q.toLowerCase(); entries=entries.filter(e=>e[0].toLowerCase().includes(ql)); }
+  return entries;
+}
+function paintVals(det,q){
+  const k=det.dataset.field, vals=det.querySelector(".vals"), checked=state.filters[k].vals;
+  const entries=facetEntries(k,q);
   const CAP=1000, shown=entries.slice(0,CAP);
   /* A checked value that no longer co-occurs (count 0) can land past the cap and
      vanish — and an invisible filter you cannot switch off is a trap. Pull any
      such value back into view. */
   if(entries.length>CAP) for(const e of entries.slice(CAP)) if(checked.has(e[0])) shown.push(e);
-  vals.innerHTML=shown.map(([val,c])=>
-    '<div class="vrow"><label><input type="checkbox" data-field="'+esc(k)+'" data-val="'+esc(val)+'"'+(checked.has(val)?" checked":"")+'>'+
-    '<span class="vtxt">'+esc(val)+'</span></label><span class="vc">'+c+'</span></div>').join("")
+  vals.innerHTML=shown.map(([v,c])=>
+    '<div class="vrow"><label><input type="checkbox" data-field="'+esc(k)+'" data-val="'+esc(v)+'"'+(checked.has(v)?" checked":"")+'>'+
+    '<span class="vtxt">'+esc(v)+'</span></label><span class="vc">'+c+'</span></div>').join("")
     + (entries.length>shown.length?'<div class="muted" style="padding:4px">…'+(entries.length-shown.length)+' more — refine the filter</div>':'');
 }
+/* Everything the panel is offering, not merely the rows it drew: past the render cap
+   "all" used to select the first 1000 and stop, with nothing to say it had. What the
+   type-ahead has narrowed the panel to is still respected — that is what "all" means
+   while a search is in the box. */
 function toggleAllValues(k,on,det){
   const set=state.filters[k].vals;
-  det.querySelectorAll('.vals input[type=checkbox]').forEach(cb=>{ cb.checked=on; const v=cb.dataset.val; if(on)set.add(v); else set.delete(v); });
+  const fs=det.querySelector(".fsearch");
+  for(const [v] of facetEntries(k,fs?fs.value:"")){ if(on) set.add(v); else set.delete(v); }
+  det.querySelectorAll('.vals input[type=checkbox]').forEach(cb=>{ cb.checked=on; });
   markActive(det); apply();
 }
 function markActive(det){ const f=state.filters[det.dataset.field]; det.dataset.active=(f.vals.size||f.missing||f.present)?"1":"0"; }
@@ -951,7 +997,7 @@ function clearLiveFilters(){
 /* ---------- filtering + paging ---------- */
 function fieldActive(f){ return !!(f && (f.vals.size||f.missing||f.present)); }
 function fieldOK(r,k,f){                      // does r satisfy field k's filter?
-  const v=isRec(r)&&(k in r)?r[k]:undefined, miss=isMissing(v);
+  const v=val(r,k), miss=isMissing(v);
   if(f.present&&!miss) return true;
   if(f.missing&&miss) return true;
   if(f.vals.size&&!miss&&f.vals.has(valKey(v))) return true;
@@ -973,7 +1019,7 @@ function searchOK(r){
    is not suspended when its field is switched off, because it no longer belongs to
    that panel. The search box is never snapshotted; it narrows the whole union. */
 function makeClause(spec){
-  const byField={};
+  const byField=bare();          // keyed by field name: a plain {} would take __proto__ as a prototype
   const term=k=>byField[k]||(byField[k]={vals:new Set(),missing:false,present:false});
   for(const k in spec.f||{}) for(const v of spec.f[k]) term(k).vals.add(v);
   for(const k of spec.p||[]) term(k).present=true;
@@ -981,7 +1027,7 @@ function makeClause(spec){
   return {terms:Object.entries(byField)};      // [k, {vals,missing,present}] — what fieldOK wants
 }
 function liveClause(){                         // the panels, as a clause spec; null if nothing set
-  const spec={f:{},p:[],m:[]};
+  const spec={f:bare(),p:[],m:[]};             // .f is keyed by field name — see makeClause
   let any=false;
   for(const k of state.scalarFields){
     const f=state.filters[k]; if(!f||state.hidden.has(k)) continue;
@@ -1021,7 +1067,7 @@ function computeFacets(searched){
     if(cnt>=2) continue;
     const targets = cnt===1 ? [failed] : SF;
     for(const k of targets){
-      const v=isRec(r)&&(k in r)?r[k]:undefined;
+      const v=val(r,k);
       if(isMissing(v)) fm[k]++;
       else { fp[k]++; const kk=valKey(v); fv[k].set(kk,(fv[k].get(kk)||0)+1); }
     }
@@ -1128,39 +1174,77 @@ function cmpVals(a,b){
    the data shouldn't dredge the empty rows to the top. Ties return 0, so a stable
    sort keeps them in file order whichever way round. */
 function cmpRecords(x,y,k,desc,last){
-  const a=x?x[k]:undefined, b=y?y[k]:undefined;
+  const a=val(x,k), b=val(y,k);
   const ma=isMissing(a), mb=isMissing(b);
   if(ma||mb) return ma&&mb ? 0 : (ma?1:-1);
   /* by last word, then by the whole value, so the Smiths land together and in order */
   const c=last ? (cmpVals(lastWord(a),lastWord(b)) || cmpVals(a,b)) : cmpVals(a,b);
   return desc ? -c : c;
 }
+/* ---------- what apply() may skip ----------
+   Turning a page changes nothing about WHICH records match or in what order, yet
+   apply() used to re-search, re-filter, re-facet and re-sort for every one. These
+   two signatures say when that work would produce what we already have.
+
+   Derived from state rather than set by the handlers that mutate it: a dirty flag
+   obliges every future call site to remember to invalidate it, and there are a
+   dozen. The cost is proportional to the number of SELECTED values, not to the
+   number of records — microseconds against the sort it saves. */
+function rowsSig(){
+  const p=[state.dataRev, state.search];
+  /* Switched-off fields count twice over: one that is off has its filter suspended,
+     AND has no facets computed for it at all — so a field coming back needs them
+     built even when nothing about which records match has changed. */
+  for(const k of state.fields) if(state.hidden.has(k)) p.push("h",k);
+  for(const [k,f] of liveTerms())                     // hidden fields are absent here, as they are from matching
+    p.push(k, f.missing?"m":"", f.present?"p":"", [...f.vals].join(""));
+  p.push("|");
+  for(const c of state.clauses)                         // static once saved, but cheap to spell out
+    for(const [k,f] of c.terms) p.push(k, f.missing?"m":"", f.present?"p":"", [...f.vals].join(""));
+  return p.join("");
+}
+const sortSig = levels => levels.map(s=>s.k+(s.desc?"▼":"▲")+(usesLastWord(s)?"L":"")).join("");
 function apply(){
-  const live=liveTerms();
-  /* searchOK() scans every field of a record, so it is by far the priciest test
-     here; run it once and let both the filter pass and the facets reuse the result */
-  const searched = state.search ? state.records.filter(searchOK) : state.records;
-  /* Filter and tally in one pass. For each saved set we count the records it puts
-     on screen that nothing else does — remove that set and exactly those disappear
-     — plus, for the tooltip, how many it matches in all. */
-  const cs=state.clauses, n=cs.length;
-  const uniq=new Array(n).fill(0), hits=new Array(n).fill(0);
-  /* A record is shown when it matches any saved set, or the live panels — which
-     count as one more set, except that empty panels add nothing. */
-  state.filtered=searched.filter(r=>{
-    let matched=0, only=-1;
-    for(let i=0;i<n;i++) if(clauseOK(r,cs[i])){ hits[i]++; only=(++matched===1)?i:-1; }
-    const liveHit = (n && !live.length) ? false : live.every(([k,f])=>fieldOK(r,k,f));
-    if(only>=0 && !liveHit) uniq[only]++;
-    return matched>0 || liveHit;
-  });
-  state.clauseUniq=uniq; state.clauseHits=hits;
-  paintClauseCounts();
-  const levels=activeSorts();   // sort the whole result, not just the page; Array#sort is stable
-  if(levels.length) state.filtered.sort((x,y)=>cmpMulti(x,y,levels));
-  renderSortSelects(levels);    // offer another level only while ties remain
-  computeFacets(searched);
-  refreshFacetUI();
+  const sig=rowsSig(), levels=activeSorts(), ssig=sortSig(levels);
+  const sameRows = sig===state.sigRows, sameSort = sameRows && ssig===state.sigSort;
+  state.sigRows=sig; state.sigSort=ssig;
+  if(!sameRows){
+    state.stats.filters++;
+    const live=liveTerms();
+    /* searchOK() scans every field of a record, so it is by far the priciest test
+       here; run it once and let both the filter pass and the facets reuse the result */
+    const searched = state.search ? state.records.filter(searchOK) : state.records;
+    /* Filter and tally in one pass. For each saved set we count the records it puts
+       on screen that nothing else does — remove that set and exactly those disappear
+       — plus, for the tooltip, how many it matches in all. */
+    const cs=state.clauses, n=cs.length;
+    const uniq=new Array(n).fill(0), hits=new Array(n).fill(0);
+    /* A record is shown when it matches any saved set, or the live panels — which
+       count as one more set, except that empty panels add nothing. */
+    state.base=searched.filter(r=>{
+      let matched=0, only=-1;
+      for(let i=0;i<n;i++) if(clauseOK(r,cs[i])){ hits[i]++; only=(++matched===1)?i:-1; }
+      const liveHit = (n && !live.length) ? false : live.every(([k,f])=>fieldOK(r,k,f));
+      if(only>=0 && !liveHit) uniq[only]++;
+      return matched>0 || liveHit;
+    });
+    state.clauseUniq=uniq; state.clauseHits=hits;
+    paintClauseCounts();
+    state.stats.facets++;
+    computeFacets(searched);
+    refreshFacetUI();
+  }
+  if(!sameSort){                // sort the whole result, not just the page; Array#sort is stable
+    state.stats.sorts++;
+    /* From the file-order base every time, never from the last ordering: (file
+       order) has to be able to give the data back exactly as it came, and a sort
+       applied on top of the previous one would not be the sort that was asked for. */
+    state.filtered=state.base.slice();
+    if(levels.length) state.filtered.sort((x,y)=>cmpMulti(x,y,levels));
+    /* sortHasTies() inside is another full scan, and the ties cannot have changed
+       while neither the rows nor the levels did */
+    renderSortSelects(levels);  // offer another level only while ties remain
+  }
   $("#resCount").textContent=state.filtered.length.toLocaleString();
   const ps=state.pageSize==="all"?(state.filtered.length||1):state.pageSize;
   const pages=Math.max(1,Math.ceil(state.filtered.length/ps));
@@ -1269,7 +1353,7 @@ function restoreFromParams(params){
       if(kind==="f") for(const v of vals) f.vals.add(v);
       else if(kind==="p") f.present=true; else f.missing=true;
     }else{                                          // a saved set
-      const s=saved[num]||(saved[num]={f:{},p:[],m:[]});
+      const s=saved[num]||(saved[num]={f:bare(),p:[],m:[]});   // see makeClause
       if(kind==="f") (s.f[k]||(s.f[k]=[])).push(...vals);
       else if(kind==="p") s.p.push(k); else s.m.push(k);
     }
@@ -1311,7 +1395,7 @@ function renderValue(v,key){
       : '<span class="chip">'+renderScalar(x,key)+'</span>').join("");
   }
   if(typeof v==="object")
-    return '<div class="obj">'+Object.entries(v).map(([k,val])=>'<div class="kv"><span class="k">'+esc(k)+'</span><span class="v">'+renderValue(val,k)+'</span></div>').join("")+'</div>';
+    return '<div class="obj">'+Object.entries(v).map(([k,x])=>'<div class="kv"><span class="k">'+esc(k)+'</span><span class="v">'+renderValue(x,k)+'</span></div>').join("")+'</div>';
   return renderScalar(v,key);
 }
 function renderScalar(v,key){
@@ -1330,8 +1414,8 @@ function renderObjLine(o,key){
   const t=o.title||o.name||null;
   if(t){ const bits=[]; for(const k of ["journal","venue","source","year","date"]) if(o[k]!=null) bits.push(esc(String(o[k])));
     return '<div class="pub">'+esc(String(t))+(bits.length?' <span class="j">— '+bits.join(", ")+'</span>':'')+'</div>'; }
-  return '<div class="pub">'+Object.entries(o).map(([k,val])=>esc(k)+": "+
-    (val!==null&&typeof val==="object"?esc(JSON.stringify(val)):renderScalar(val,k))).join("; ")+'</div>';
+  return '<div class="pub">'+Object.entries(o).map(([k,x])=>esc(k)+": "+
+    (x!==null&&typeof x==="object"?esc(JSON.stringify(x)):renderScalar(x,k))).join("; ")+'</div>';
 }
 function scalarOptions(){ return state.scalarFields.map(k=>'<option value="'+esc(k)+'">'+esc(k)+'</option>').join(""); }
 function populateFieldSelects(){
@@ -1365,20 +1449,20 @@ function recordRows(r,ctx){
   const {tf,sub,imgF}=ctx;
   /* only a value that really is a picture becomes the thumbnail; anything else in
      that column stays an ordinary row rather than a broken image */
-  const iv=imgF&&r?r[imgF]:undefined;
+  const iv=imgF?val(r,imgF):undefined;
   const img=(!isMissing(iv)&&typeof iv!=="object"&&isImageValue(iv,imgF))?iv:null;
   const rows=[], nested=[];
   for(const k of state.scalarFields){ if(k===tf||k===sub||state.hidden.has(k)) continue;
     if(k===imgF&&img!==null) continue;                     // shown as the thumbnail instead
-    const v=r?r[k]:undefined; if(isMissing(v)) continue;   // hide empty scalar fields
+    const v=val(r,k); if(isMissing(v)) continue;           // hide empty scalar fields
     rows.push({k,v,long:isLongText(k)}); }
-  for(const k of state.complexFields){ if(state.hidden.has(k)) continue; const v=r?r[k]:null;
+  for(const k of state.complexFields){ if(state.hidden.has(k)) continue; const v=val(r,k);
     const n=Array.isArray(v)?v.length:(v&&typeof v==="object"?Object.keys(v).length:0);
     if(v==null||n===0) continue;   // skip empty non-scalar fields
     nested.push({k,v,n}); }
   /* undefined means "no subtitle": a value that is missing never passes isMissing */
-  return {tv:r?r[tf]:undefined, sub:(sub&&sub!==tf&&r&&!isMissing(r[sub]))?r[sub]:undefined,
-          img, imgKey:imgF, rows, nested};
+  const sv=sub&&sub!==tf?val(r,sub):undefined;
+  return {tv:val(r,tf), sub:isMissing(sv)?undefined:sv, img, imgKey:imgF, rows, nested};
 }
 function renderCards(){
   $("#cards").className="grid"+(state.viewMode==="full"?" full":"");
@@ -1432,6 +1516,23 @@ function renderSelBar(){
   const n=state.selected.size;
   $("#selbar").hidden=!n;
   $("#selCount").textContent=n+" selected";
+  /* the page box reads like a table's header checkbox: ticked when the whole page is
+     in, part-way when only some of it is */
+  const boxes=$("#cards").querySelectorAll(".selbox"), on=[...boxes].filter(b=>b.checked).length;
+  const p=$("#selPage");
+  p.checked = boxes.length>0 && on===boxes.length;
+  p.indeterminate = on>0 && on<boxes.length;
+}
+/* Take the whole page, or give it back. The double-click and the box in the bar are
+   the same gesture — the second one exists because touch has no double-click and a
+   keyboard cannot make one either. */
+function setPageSelection(on){
+  for(const b of $("#cards").querySelectorAll(".selbox")){
+    const r=state.pageItems[+b.dataset.idx];
+    if(on) state.selected.add(r); else state.selected.delete(r);
+    b.checked=on; const c=b.closest(".card"); if(c) c.classList.toggle("sel",on);
+  }
+  renderSelBar();
 }
 function clearSelection(){
   state.selected.clear();
@@ -1554,8 +1655,8 @@ function mailValue(v,key){
       : '<span style="'+M.chip+'">'+mailScalar(x,key)+'</span>').join("");
   }
   if(typeof v==="object")
-    return '<table style="'+M.tbl+'">'+Object.entries(v).map(([k,val])=>
-      '<tr><td style="'+M.k+'">'+esc(k)+'</td><td style="'+M.v+'">'+mailValue(val,k)+'</td></tr>').join("")+'</table>';
+    return '<table style="'+M.tbl+'">'+Object.entries(v).map(([k,x])=>
+      '<tr><td style="'+M.k+'">'+esc(k)+'</td><td style="'+M.v+'">'+mailValue(x,k)+'</td></tr>').join("")+'</table>';
   return mailScalar(v,key);
 }
 function selectionHTML(){
@@ -1586,8 +1687,9 @@ function selectionHTML(){
 
 /* ---------- the clipboard ----------
    Both flavors go on at once and the paste target picks: a mail composer takes the
-   HTML, a plain-text field the text. ClipboardItem needs a secure context (https,
-   or localhost) — opened from file:// there isn't one, hence the fallback, which
+   HTML, a plain-text field the text. ClipboardItem needs a secure context — https,
+   localhost, and file://, which browsers also count as trustworthy — so the one
+   context without it is plain http:// to another host. Hence the fallback, which
    reaches the same two flavors through a copy event. */
 async function copyOut(text,html){
   if(navigator.clipboard&&window.ClipboardItem&&window.isSecureContext){
@@ -1619,15 +1721,19 @@ function legacyCopy(text,html){
   return ok;
 }
 /* the clipboard is silent about success, so the button says it */
-function flash(btn,ok){
+function flash(btn,ok,what){
   btn.classList.remove("ok","bad");
   void btn.offsetWidth;                          // restart the flash on a second click
   btn.classList.add(ok?"ok":"bad");
   setTimeout(()=>btn.classList.remove("ok","bad"),900);
+  /* the same news in words: a colour is no use to a screen reader, and green
+     against red is exactly the pair most colourblind readers cannot separate */
+  $("#copyStatus").textContent=(ok?"Copied ":"Could not copy ")+what;
 }
 async function copySelection(btn,full){
-  if(!state.selected.size) return;
-  flash(btn, await copyOut(selectionText(full), full?selectionHTML():null));
+  const n=state.selected.size; if(!n) return;
+  const okd=await copyOut(selectionText(full), full?selectionHTML():null);
+  flash(btn, okd, n+(n===1?" record":" records")+(full?", with formatting":" as text"));
 }
 
 /* ---------- the filters, in words ----------
@@ -1683,7 +1789,7 @@ $("#orFilter").onclick=()=>{
 };
 $("#copyFilters").onclick=async e=>{
   const btn=e.currentTarget;
-  flash(btn, await copyOut(describeFilters(), null));
+  flash(btn, await copyOut(describeFilters(), null), "the filter description");
 };
 $("#clauses").addEventListener("click",e=>{
   const b=e.target.closest("button[data-clause]"); if(!b) return;
@@ -1706,14 +1812,9 @@ $("#cards").addEventListener("change",e=>{
 $("#cards").addEventListener("dblclick",e=>{
   const hit=e.target.closest&&e.target.closest(".selbox"); if(!hit) return;
   const boxes=[...$("#cards").querySelectorAll(".selbox")];
-  const on=!boxes.every(b=>b.checked);          // all ticked already -> clear them instead
-  for(const b of boxes){
-    const r=state.pageItems[+b.dataset.idx];
-    if(on) state.selected.add(r); else state.selected.delete(r);
-    b.checked=on; const c=b.closest(".card"); if(c) c.classList.toggle("sel",on);
-  }
-  renderSelBar();
+  setPageSelection(!boxes.every(b=>b.checked));  // all ticked already -> clear them instead
 });
+$("#selPage").onchange=e=>setPageSelection(e.target.checked);
 $("#selClear").onclick=clearSelection;
 $("#copyShort").onclick=e=>copySelection(e.currentTarget,false);   // S: text, chosen fields
 $("#copyFull").onclick=e=>copySelection(e.currentTarget,true);     // F: rich HTML, everything shown
@@ -1721,8 +1822,9 @@ $("#copyFull").onclick=e=>copySelection(e.currentTarget,true);     // F: rich HT
 $("#cards").addEventListener("toggle",e=>{
   const d=e.target; if(!d.classList.contains("cf")||!d.open) return;
   const body=d.querySelector(".cf-body"); if(body.dataset.rendered==="1") return;
-  body.dataset.rendered="1"; const r=state.pageItems[+d.dataset.idx];
-  body.innerHTML=renderValue(r?r[d.dataset.field]:null, d.dataset.field);
+  body.dataset.rendered="1";
+  const k=d.dataset.field, v=val(state.pageItems[+d.dataset.idx],k);
+  body.innerHTML=renderValue(v===undefined?null:v, k);
 },true);
 /* Double-click a nested field's triangle to open that field on every card of the
    page at once — and again to close them. The two clicks of the double-click
@@ -1763,7 +1865,10 @@ $("#metaBody").addEventListener("change",e=>{
       const c=b.closest(".ftog"); c.classList.toggle("gone",!cb.checked);
       c.title=cb.checked?"":"the field is switched off, so no copy shows it";
     }
-  syncFieldUI(); apply();      // a suspended filter changes what matches
+  /* renderClauses() is the only writer of the OR button's disabled state, and
+     suspending or reviving a filter is exactly what changes whether there is
+     anything to save */
+  renderClauses(); syncFieldUI(); apply();      // a suspended filter changes what matches
 });
 $("#metaBody").addEventListener("click",e=>{
   const s=e.target.closest("button[data-stog]");
@@ -1778,7 +1883,7 @@ $("#metaBody").addEventListener("click",e=>{
   const tf=titleField(), sub=subtitleField();
   for(const k of list){ if(k===tf||k===sub) continue;
     if(b.dataset.tog==="all") state.hidden.delete(k); else state.hidden.add(k); }
-  renderMeta(); syncFieldUI(); apply();
+  renderMeta(); renderClauses(); syncFieldUI(); apply();
 });
 
 /* delegated: the selects are rebuilt whenever the cascade grows or shrinks */
@@ -1803,7 +1908,7 @@ $("#pageSize").addEventListener("change",e=>{ state.pageSize=e.target.value==="a
 $("#recordArray").addEventListener("change",e=>setRecordSource(e.target.value,false));
 /* a field promoted to the heading or the card image stops being hidden — the two
    would contradict — which can also bring its filter panel back, hence apply() */
-function pickField(sel,val){ state[sel]=val; state.hidden.delete(val); renderMeta(); syncFieldUI(); apply(); }
+function pickField(sel,v){ state[sel]=v; state.hidden.delete(v); renderMeta(); renderClauses(); syncFieldUI(); apply(); }
 $("#titleField").addEventListener("change",e=>pickField("titleSel",e.target.value));
 $("#subField").addEventListener("change",e=>pickField("subSel",e.target.value));
 $("#imageField").addEventListener("change",e=>pickField("imageSel",e.target.value));
@@ -1861,25 +1966,35 @@ window.addEventListener("dragover",e=>{e.preventDefault();drop.style.display="fl
 ["dragleave","drop"].forEach(ev=>window.addEventListener(ev,e=>{ if(ev==="dragleave"&&e.relatedTarget) return; drop.style.display="none"; }));
 window.addEventListener("drop",e=>{ e.preventDefault(); readFile(e.dataTransfer.files[0]); });
 
+function showEmpty(why){
+  $("#emptyState").style.display="block";
+  const e=$("#emptyErr");
+  e.textContent=why||""; e.style.display=why?"block":"none";
+}
 (async function(){
   const params=parseQuery(location.search);
   const file=params.one("file");          // no default — blank page until a file is given
-  if(file){
-    state.restoring=true;
-    try{
-      const res=await fetch(file,{cache:"no-store"});
-      if(res.ok){
-        loadData(await res.json(),file);   // builds default view (URL writes suppressed)
-        if(/^https?:\/\//i.test(file)) $("#urlInput").value=file;  // reflect URL source
-        restoreFromParams(params);          // rehydrate filters/search/display from the URL
-        state.restoring=false;
-        apply();                            // filter, render, and write the canonical URL
-        return;
-      }
-    }catch(e){}
-    state.restoring=false;
+  if(!file){ showEmpty(); return; }
+  state.restoring=true;
+  let loaded=false;
+  try{
+    const res=await fetch(file,{cache:"no-store"});
+    if(!res.ok) throw new Error("the server answered "+res.status+(res.statusText?" "+res.statusText:""));
+    loadData(await res.json(),file);       // builds default view (URL writes suppressed)
+    loaded=true;
+    if(/^https?:\/\//i.test(file)) $("#urlInput").value=file;   // reflect URL source
+    restoreFromParams(params);             // rehydrate filters/search/display from the URL
+  }catch(err){
+    /* Two failures that deserve opposite treatment. If the data never arrived there
+       is nothing to show, so say why rather than leaving a blank page that looks
+       identical to having been given no link at all. If it arrived and only the view
+       failed to rehydrate, the records are still good: keep them and lose the view,
+       never the other way round. */
+    if(!loaded){ state.restoring=false; showEmpty("Could not load "+file+" — "+err.message); return; }
+    console.error("could not restore the view from the URL:",err);
   }
-  $("#emptyState").style.display="block";
+  state.restoring=false;
+  apply();                                 // filter, render, and write the canonical URL
 })();
 </script>
 </body>

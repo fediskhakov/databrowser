@@ -5,6 +5,9 @@ const src = [
   "const bare = () => Object.create(null);",
   'const COLLATOR = new Intl.Collator(undefined,{sensitivity:"base",numeric:true});',
   "const isRec = r => !!r && typeof r==='object';",
+  /* the page reads a field by own property only, so a record without a __proto__ key
+     does not inherit Object.prototype as its value — cmpRecords goes through it */
+  slice("const own = Object.prototype.hasOwnProperty;", "const val = (r,k) => has(r,k) ? r[k] : undefined;"),
   "const isMissing = v => v===null || v===undefined || v===\"\";",
   "const normKey = k => String(k).toLowerCase().replace(/[^a-z0-9]+/g,'_');",
   slice("const NAME_FIELD=", "const lastWord = v => { const p=String(v).trim().split(/\\s+/); return p[p.length-1]; };"),
