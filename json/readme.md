@@ -70,7 +70,8 @@ object or array is **nested**, and appears as a collapsible expander instead.
 ## Layout
 
 - **Header** — the **☰** panel button, filename, **search** box, live record count,
-  and pagination (hidden when *Records per page* is `all`).
+  pagination (hidden when *Records per page* is `all`), and — once something is
+  ticked — the [selection bar](#selecting-and-copying).
 - **Left panel** — **Sort**, **Filters** (its buttons, any saved filter sets, then a
   collapsible panel per scalar field), and **Display** options.
 - **Main area** — the collapsed *Metadata & dataset info* panel, then the records.
@@ -218,6 +219,11 @@ The **title and subtitle fields cannot be switched off** (they are in the headin
 their boxes show fixed on and **none** skips them. Global search still matches
 switched-off fields — search is for finding records, not for choosing what to show.
 
+Below these rows sits a third one of the same shape, **short copy fields**, which
+picks what the **S** button copies rather than what the page shows — and there the
+title and subtitle *can* be unticked, since nothing about the card depends on it.
+See [choosing what the short copy prints](#choosing-what-the-short-copy-prints).
+
 ---
 
 ## How records render
@@ -303,6 +309,93 @@ them entirely; `data:` URIs never touch the network.
 
 ---
 
+## Selecting and copying
+
+Every record carries an unlabelled **checkbox in its bottom-right corner** — of the
+card, or of the row in full-width view. **Double-click** one to tick every card on
+the page at once, and again to clear them — the page, so under a filter it takes
+exactly what the filter left, and with *Records per page* at `all`, everything.
+Tick one and a bar appears at the right of the header, the search box giving up the
+width for it:
+
+```
+                                            2 selected  ✕  [⧉S]  [⧉F]
+```
+
+The two blue buttons copy the selected records to the clipboard: **S** is the
+*short* copy — plain text, carrying only the fields you
+[chose for it](#choosing-what-the-short-copy-prints) — and **F** the *full* one,
+rich HTML with every field the card shows. Their tooltips say which is which. **✕**
+clears the selection.
+
+**What is copied** is what the cards show: the same fields, in the same order,
+honoring [switched-off fields](#switching-fields-on-and-off), the chosen title and
+subtitle, and the picture column. Empty fields are left out, as on screen. The
+records come in the order you see them, and a selected record the filters are
+currently hiding is appended after those.
+
+**The selection follows its records, not their positions.** Filter, sort, page or
+search all you like: what you ticked stays ticked, and a record hidden by a filter
+stays in the basket until you untick it or clear. Changing the *main record array*
+empties it — those records are gone. Selections are **not** written into the URL: a
+shared link carries a view, not a basket.
+
+**S, as text** — a block per record, blank line between, the title (and subtitle) on
+top and the fields indented beneath. Values print in full, since text cannot hold a
+link: a URL shown on screen as `open homepage` arrives as the address itself, and an
+identifier as the identifier. Arrays of scalars stay on one line, arrays of objects
+get a line each. Newlines inside a value become spaces — the page does not show
+them as breaks, so neither does the copy.
+
+```
+Ada Lovelace — Analyst
+  orcid: 0000-0002-1825-0097
+  homepage: https://example.org/people/ada-lovelace/profile/page
+  works (2):
+    Note G — Memoirs, 1843
+    Sketch of the Analytical Engine
+```
+
+### Choosing what the short copy prints
+
+The metadata panel carries a **short copy fields** row directly under the display
+toggles, marked with a small copy of the **S** glyph and working the same way: a
+checkbox per field, **all** / **none** to bulk toggle, and a count of what is
+currently left out. Everything starts ticked.
+
+Unticking a field removes it from the **S** copy only — the page is unchanged, and
+so is the **F** copy, which always prints everything shown. A field switched off in
+the rows above is in no copy at all, so its chip here is greyed out.
+
+Unlike the display rows, this one offers **the title and subtitle too**: they cannot
+leave the card, but a short copy may well want neither. Untick the subtitle and the
+heading is the title alone; untick the title and the subtitle stands by itself,
+without its dash. Untick both and the block has no heading, so its fields sit at the
+margin rather than indented under nothing — and a record with nothing left to print
+contributes no block at all. **none** takes the heading out with everything else.
+
+The choice rides in the URL as `h2`, exactly as the display switches ride in `h`, so
+a link you share reproduces it.
+
+**F, as HTML** — the cards, to paste into a mail composer and have them arrive looking
+like the page: same borders, headings, key/value rows, chips, thumbnails and links.
+Mail clients drop `<style>` blocks and class attributes, so every rule is written
+inline and the rows are a table. Two differences from the screen: collapsible
+sections are printed open, because an email cannot hold one, and the card layout is
+used even in full-width view, because a mail column is narrow.
+
+**F carries a text version too**, alongside the HTML, so a plain-text field pasted
+into still gets something readable. That text is the *full* record — the short
+copy's field choice belongs to **S** alone, and applying it here would let a paste
+into a plain editor arrive narrowed, or empty.
+
+Copying needs a **secure context** — `https://`, or the `127.0.0.1` that
+`serve-json.sh` gives you. Over plain `http://` to another host, or from `file://`,
+the viewer falls back to the older copy path; if even that is refused the button
+flashes red instead of green.
+
+---
+
 ## Shareable URLs
 
 Every filter, sort and display change is written back into the address bar via
@@ -325,6 +418,7 @@ Every filter, sort and display change is written back into the address bar via
 | `p=<fields>` / `m=<fields>` | Fields whose "not missing" / "missing" box is set |
 | `f<n>.<field>`, `p<n>`, `m<n>` | The same, for [saved filter set](#combining-sets-of-filters-with-or) `<n>` |
 | `h=<fields>` | [Switched-off fields](#switching-fields-on-and-off) |
+| `h2=<fields>` | Fields left out of the [short copy](#choosing-what-the-short-copy-prints) |
 
 Anything repeatable is **packed into one parameter**: the field name appears once
 however many values are selected, and flags name their fields instead of repeating
@@ -350,7 +444,9 @@ authors whose `phd_year` is missing.
 One HTML file; no external scripts, fonts or stylesheets. All processing is
 client-side — the only requests are the JSON you choose and, if the dataset has an
 image column, the thumbnails. Files opened via the picker or drag-and-drop never
-leave the browser. Copy the file anywhere and it works offline.
+leave the browser. Copy the file anywhere and it works offline. Copying records to
+the clipboard is likewise local: the two buttons build both flavors in the page and
+hand them to the browser.
 
 ## Notes & limits
 
@@ -365,6 +461,9 @@ leave the browser. Copy the file anywhere and it works offline.
 - Field order follows JavaScript key order, so purely numeric field names sort ahead
   of the rest regardless of their position in the file.
 - For `file://` use, only the picker and drag-and-drop work.
+- A copied selection is a snapshot of the display, not of the data: it holds what
+  the cards show, not the fields you switched off, and no JSON structure. The short
+  copy narrows that further, to the fields ticked for it.
 
 ## Files
 
@@ -381,4 +480,6 @@ Fixtures, each exercising one rule and its near-misses:
 `sort-test.json` (surnames, one-word names, missing values),
 `text-test.json` (long text, embedded newlines, wrapper metadata),
 `messy-test.json` (hostile shapes: a primitive among the records, a `__proto__`
-field name, an empty field name, mixed arrays).
+field name, an empty field name, mixed arrays),
+`copy-test.json` (everything the two copy buttons have to render: subtitle,
+identifier, collapsed URL, thumbnail, long text, empty field, nested arrays).

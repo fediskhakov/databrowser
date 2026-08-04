@@ -17,7 +17,8 @@ const sandbox = {
     raw: {departments: []}, recordKey: "departments", fileName: "d.json",
     fields: ["repec_id","world_rank","university","country_code","category","refs"],
     scalarFields: ["repec_id","world_rank","university","country_code","category"],
-    filters: {}, clauses: [], hidden: new Set(), search: "", pageSize: 100, page: 0, sorts: [],
+    filters: {}, clauses: [], hidden: new Set(), shortOff: new Set(),
+    search: "", pageSize: 100, page: 0, sorts: [],
     viewMode: "cards", titleSel: null, subSel: null, imageSel: null, autoLink: true, restoring: false
   },
   history: { replaceState: (a, b, url) => { captured = url; } },
@@ -26,7 +27,7 @@ const sandbox = {
 const st = sandbox.state;
 function reset(){
   for(const k of st.scalarFields) st.filters[k] = {vals: new Set(), missing: false, present: false};
-  st.clauses = []; st.hidden.clear(); st.sorts = []; st.search = ""; st.page = 0;
+  st.clauses = []; st.hidden.clear(); st.shortOff.clear(); st.sorts = []; st.search = ""; st.page = 0;
   st.titleSel = null; st.subSel = null; st.imageSel = null;
 }
 reset();
@@ -70,6 +71,18 @@ st.hidden.add("country_code"); st.hidden.add("category"); st.hidden.add("refs");
 ok(q() === "?file=d.json&h=country_code,category,refs", "switched-off fields pack too\n         got " + q());
 ok(JSON.stringify(params().many("h")) === JSON.stringify(["country_code","category","refs"]),
    "and read back as a list");
+
+console.log("\n== the short copy's fields ride alongside, in h2 ==");
+reset();
+st.shortOff.add("country_code"); st.shortOff.add("refs");
+ok(q() === "?file=d.json&h2=country_code,refs", "left-out fields pack into h2\n         got " + q());
+ok(JSON.stringify(params().many("h2")) === JSON.stringify(["country_code","refs"]), "and read back as a list");
+st.hidden.add("category");
+ok(q() === "?file=d.json&h=category&h2=country_code,refs",
+   "h and h2 are independent lists\n         got " + q());
+/* h2 must not be mistaken for a numbered h — the two namespaces touch here */
+ok(JSON.stringify(params().many("h")) === JSON.stringify(["category"]),
+   "and h does not swallow h2's fields");
 
 console.log("\n== saved sets keep their numbering ==");
 reset();

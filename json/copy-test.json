@@ -1,0 +1,53 @@
+{
+  "description": "Fixture for selecting records and copying them. Every shape the two copy buttons have to render is here once: a title field (name) and a candidate subtitle (role), a self-identifying identifier that resolves to a link (orcid), a URL long enough to be collapsed to a label on screen but which must arrive whole in the text copy (homepage), a picture column that becomes the thumbnail (photo), a long text field with an embedded newline that must not survive as a line break (bio), a boolean, a number, an empty field that no copy may mention (empty), an array of scalars (tags) and an array of objects (works).",
+  "generated": "2026-08-04",
+  "people": [
+    {
+      "name": "Ada Lovelace",
+      "role": "Analyst",
+      "orcid": "0000-0002-1825-0097",
+      "homepage": "https://example.org/people/ada-lovelace/profile/page",
+      "photo": "https://example.org/img/ada.jpg",
+      "bio": "She worked on the Analytical Engine and wrote what is generally taken to be the first algorithm intended to be carried out by a machine, together with\nnotes running to three times the length of the memoir they annotate.",
+      "active": true,
+      "score": 9.5,
+      "empty": "",
+      "tags": ["math", "computing"],
+      "works": [
+        { "title": "Note G", "journal": "Memoirs", "year": 1843 },
+        { "title": "Sketch of the Analytical Engine" }
+      ]
+    },
+    {
+      "name": "Grace Hopper",
+      "role": "Rear Admiral",
+      "orcid": "0000-0001-5109-3700",
+      "homepage": "https://example.org/people/grace-hopper/profile/page",
+      "photo": "https://example.org/img/grace.png",
+      "bio": "She built the first compiler and argued that a programming language could read like English, which is roughly how COBOL came about; she also spent decades\npersuading the Navy that a computer need not be a single large machine.",
+      "active": false,
+      "score": 8.25,
+      "empty": "",
+      "tags": ["compilers", "navy", "cobol"],
+      "works": [
+        { "title": "The Education of a Computer", "venue": "ACM", "year": 1952 }
+      ]
+    },
+    {
+      "name": "Alan Turing",
+      "role": "Logician",
+      "orcid": "0000-0003-1415-9265",
+      "homepage": "https://example.org/people/alan-turing/profile/page",
+      "photo": "https://example.org/img/alan.jpg",
+      "bio": "He gave a definition of computability in terms of an abstract machine, worked on the wartime decryption of Enigma traffic, and later asked whether the\nquestion of whether a machine can think is a well posed one at all.",
+      "active": true,
+      "score": 9.75,
+      "empty": "",
+      "tags": ["logic", "computing"],
+      "works": [
+        { "title": "On Computable Numbers", "journal": "Proc. LMS", "year": 1936 },
+        { "title": "Computing Machinery and Intelligence", "journal": "Mind", "year": 1950 }
+      ]
+    }
+  ]
+}

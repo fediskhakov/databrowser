@@ -54,7 +54,9 @@ const chrome = spawn(CHROME, ["--headless", "--disable-gpu", `--remote-debugging
 
   const q = `document.querySelectorAll('[data-fieldtog]').length`;
   ok(await evaluate(q) === 11, "11 toggleable fields (the title field's box is fixed on)");
-  ok(await evaluate(`document.querySelectorAll('#metaBody .ftog').length`) === 12, "all 12 fields listed");
+  /* :not(.shortrow) — the short-copy row lists the same fields again, for the S button */
+  ok(await evaluate(`document.querySelectorAll('#metaBody .kv:not(.shortrow) .ftog').length`) === 12,
+     "all 12 fields listed");
   ok(await evaluate(`document.querySelector('#metaBody .ftog.fixed input').disabled &&
                      document.querySelector('#metaBody .ftog.fixed').textContent === 'repec_id'`),
      "the title field is listed but not toggleable");

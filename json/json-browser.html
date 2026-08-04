@@ -54,6 +54,25 @@
   .pager{display:flex;gap:4px;align-items:center}
   .pager button{padding:5px 9px}
   .pager .pg{padding:0 6px;color:var(--muted)}
+  /* the selection bar: last in the header, so it takes the top right and the search
+     box — the only flexible item — gives up the width for it */
+  .selbar{display:flex;gap:6px;align-items:center;margin-left:auto}
+  .selbar[hidden]{display:none}       /* .selbar's display would otherwise outrank [hidden] */
+  .selcount{font-size:12px;color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+  .selclear{padding:3px 8px;line-height:1.15;color:var(--muted)}
+  .selclear:hover{color:var(--no)}
+  .copybtn{padding:4px 8px;display:inline-flex;align-items:center}
+  .copybtn svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.6;
+               stroke-linejoin:round;pointer-events:none}
+  /* opaque, so the sheet behind stops at this one's edge and the two read as a stack */
+  .copybtn svg .sheet{fill:var(--accent)}
+  /* centred in the front sheet: the letter is what tells the two buttons apart */
+  .copybtn svg text{stroke:none;fill:currentColor;font-size:8.5px;font-weight:700}
+  /* a moment's confirmation — the clipboard gives no other sign it worked */
+  .copybtn.ok{background:var(--ok);border-color:var(--ok)}
+  .copybtn.ok svg .sheet{fill:var(--ok)}
+  .copybtn.bad{background:var(--no);border-color:var(--no)}
+  .copybtn.bad svg .sheet{fill:var(--no)}
   details.meta{margin-bottom:10px;background:var(--panel);border:1px solid var(--line);border-radius:10px}
   details.meta>summary{cursor:pointer;padding:9px 12px;font-weight:600}
   details.meta>summary .mhint{font-weight:500;font-size:12px;color:var(--muted)}
@@ -68,6 +87,12 @@
   .ftog.off{opacity:.6;text-decoration:line-through}
   .ftog.fixed{cursor:default;background:var(--accent-soft);color:var(--muted)}
   .ftog.susp{color:var(--accent);opacity:.85}   /* off, but still holds a filter */
+  .ftog.gone{opacity:.4}                        /* the field is off everywhere, so this says nothing */
+  /* the copy glyph again at label size, marking the row as the S button's */
+  .metabody .ico{width:15px;height:15px;fill:none;stroke:var(--accent);stroke-width:1.7;
+                 stroke-linejoin:round;vertical-align:-3px;margin-right:5px}
+  .metabody .ico .sheet{fill:var(--panel)}
+  .metabody .ico text{stroke:none;fill:var(--accent);font-size:8.5px;font-weight:700}
   .togacts{display:inline-flex;gap:3px;margin-right:8px;vertical-align:1px}
   .togacts .mini{padding:1px 6px;font-size:11px}
   .side h2{font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:10px 4px 6px}
@@ -120,8 +145,13 @@
   /* cards */
   .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:12px}
   .grid.full{grid-template-columns:1fr}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:12px 13px;
-        box-shadow:0 1px 2px rgba(16,24,40,.04)}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:11px;
+        padding:12px 13px 26px;box-shadow:0 1px 2px rgba(16,24,40,.04);position:relative}
+  /* The select box sits in the strip the extra bottom padding reserves, so it lands
+     in the same corner in both views without adding a row of its own. */
+  .selbox{position:absolute;right:11px;bottom:8px;width:15px;height:15px;margin:0;
+          cursor:pointer;accent-color:var(--accent)}
+  .card.sel{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
   /* image field: one square thumbnail per record, same size everywhere, scaled to
      the viewport. It shares the top line with the heading, pinned to the right —
      so nothing sits above the title and every row underneath is full width. */
@@ -198,6 +228,29 @@
       <button id="first">«</button><button id="prev">‹</button>
       <span class="pg" id="pgInfo">–</span>
       <button id="next">›</button><button id="last">»</button>
+    </span>
+    <!-- appears only while something is selected; the search box gives up the width.
+         S is the short copy — plain text, and only the fields picked in the metadata
+         panel. F is the full one — every field the card shows, as rich HTML. -->
+    <span class="selbar" id="selbar" hidden>
+      <span class="selcount" id="selCount"></span>
+      <button class="selclear" id="selClear" title="Clear the selection">✕</button>
+      <button class="primary copybtn" id="copyShort"
+              title="Short copy — the selected records as text, with the fields chosen under Metadata">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="8.5" y="2.5" width="12.5" height="15.5" rx="2.5"/>
+          <rect class="sheet" x="3" y="6" width="12.5" height="15.5" rx="2.5"/>
+          <text x="9.25" y="16.8" text-anchor="middle">S</text>
+        </svg>
+      </button>
+      <button class="primary copybtn" id="copyFull"
+              title="Full copy — every field shown, as rich HTML to paste into an email">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="8.5" y="2.5" width="12.5" height="15.5" rx="2.5"/>
+          <rect class="sheet" x="3" y="6" width="12.5" height="15.5" rx="2.5"/>
+          <text x="9.25" y="16.8" text-anchor="middle">F</text>
+        </svg>
+      </button>
     </span>
   </header>
 
@@ -300,6 +353,10 @@ const state = {
   autoLink:true, linkPlan:{}, linkFields:{},   // identifier auto-linking (presentational only)
   imageFields:[], imageAuto:null, imageSel:null,   // columns holding images; the safe default; the pick
   fieldLen:{},                                     // how long each column's values print
+  /* Records ticked for copying, held by reference rather than by index: filtering,
+     sorting and paging then cost the selection nothing. Deliberately not in the URL. */
+  selected:new Set(),
+  shortOff:new Set(),    // fields left out of the short copy (URL: h2), as hidden is of the page
   filtered:[], pageItems:[], restoring:false
 };
 
@@ -592,6 +649,8 @@ function setRecordSource(key, keepSearch){
   state.titleSel=null; state.subSel=null; state.imageSel=null;
   state.sorts=[]; state.sortSig=null;
   state.hidden.clear(); state.clauses=[];                         // field names differ per array
+  state.selected.clear();                        // the basket held records of the old array
+  state.shortOff.clear();
   state.page=0; if(!keepSearch){ state.search=""; $("#globalSearch").value=""; }
   populateFieldSelects();
   renderMeta(); renderFilters(); renderClauses(); apply();
@@ -605,6 +664,7 @@ function renderMeta(){
     '<span id="hidNote" class="muted">'+hiddenNote()+'</span>', true));
   rows.push(toggleRow("one-to-one fields", state.scalarFields, "scalar"));
   if(state.complexFields.length) rows.push(toggleRow("nested fields", state.complexFields, "complex"));
+  rows.push(shortRow());
   const lf=Object.keys(state.linkFields);
   if(lf.length) rows.push(metaRow("linked ID fields",
     lf.map(k=>k+" ("+state.linkFields[k]+")").join(", ")+(state.autoLink?"":"   — auto-linking off")));
@@ -649,6 +709,32 @@ function toggleRow(label, fields, group){
     '<span class="togacts"><button class="mini" data-tog="all" data-group="'+group+'">all</button>'+
     '<button class="mini" data-tog="none" data-group="'+group+'">none</button></span>'+
     chips+'</span></div>';
+}
+/* The S button's glyph again, small and in the accent colour, so the row below it
+   is recognizable as belonging to that button rather than to the display. */
+const SHORT_ICO='<svg class="ico" viewBox="0 0 24 24" aria-hidden="true">'+
+  '<rect x="8.5" y="2.5" width="12.5" height="15.5" rx="2.5"/>'+
+  '<rect class="sheet" x="3" y="6" width="12.5" height="15.5" rx="2.5"/>'+
+  '<text x="9.25" y="16.8" text-anchor="middle">S</text></svg>';
+const shortNote = () => state.shortOff.size ? "   — "+state.shortOff.size+" left out" : "";
+/* Which fields the SHORT copy prints. The same shape as the display toggles above,
+   but unticking one here changes nothing on screen and nothing in the full copy:
+   only what the S button writes. The title and subtitle ARE offered, unlike above —
+   they cannot leave the card, but a short copy may well want neither. A field
+   switched off above is in no copy at all, so it is shown greyed out here. */
+function shortRow(){
+  const fields=state.scalarFields.concat(state.complexFields);
+  if(!fields.length) return "";
+  const chips=fields.map(k=>{
+    const on=!state.shortOff.has(k);
+    return '<label class="ftog'+(on?"":" off")+(state.hidden.has(k)?" gone":"")+'"'+
+      (state.hidden.has(k)?' title="the field is switched off, so no copy shows it"':"")+
+      '><input type="checkbox" data-shorttog="'+esc(k)+'"'+(on?" checked":"")+'>'+esc(k)+'</label>';
+  }).join("");
+  return '<div class="kv shortrow"><span class="k">'+SHORT_ICO+'short copy fields'+
+    '<span id="shortNote" class="muted">'+shortNote()+'</span></span><span class="v">'+
+    '<span class="togacts"><button class="mini" data-stog="all">all</button>'+
+    '<button class="mini" data-stog="none">none</button></span>'+chips+'</span></div>';
 }
 
 /* ---------- filters ---------- */
@@ -1112,6 +1198,7 @@ function syncURL(){
   clause("", state.scalarFields.filter(k=>state.filters[k]).map(k=>[k,state.filters[k]]));
   state.clauses.forEach((c,i)=>clause(i+1, c.terms));
   list("h", state.fields.filter(k=>state.hidden.has(k)));      // switched-off fields
+  list("h2", state.fields.filter(k=>state.shortOff.has(k)));   // and those the short copy leaves out
   const qs=parts.join("&");
   history.replaceState(null,"", qs?("?"+qs):location.pathname);
 }
@@ -1173,7 +1260,10 @@ function restoreFromParams(params){
   for(const [key,raw] of params.list){
     const vals = raw ? raw.split(",").map(decQ) : [];
     let m;
-    if(m=/^(f)(\d*)\.([\s\S]*)$/.exec(key)) term(m[2],"f",m[3],vals);          // f.field=a,b,c
+    /* before the generic h/p/m rule, which would otherwise read h2 as a numbered
+       clause of switched-off fields — the one place the two namespaces touch */
+    if(key==="h2"){ for(const k of vals) if(state.fields.includes(k)) state.shortOff.add(k); }
+    else if(m=/^(f)(\d*)\.([\s\S]*)$/.exec(key)) term(m[2],"f",m[3],vals);     // f.field=a,b,c
     else if(m=/^([pmh])(\d*)$/.exec(key)) for(const k of vals) term(m[2],m[1],k,null);
     /* the pre-2026-08 spelling: one parameter per field, carrying =1 */
     else if(m=/^([pmh])(\d*)\.([\s\S]*)$/.exec(key)) term(m[2],m[1],m[3],null);
@@ -1246,29 +1336,46 @@ function subtitleField(){
   if(state.subSel!==null) return (state.subSel==="" || !state.scalarFields.includes(state.subSel)) ? null : state.subSel;
   return null;   // no subtitle by default — generic; the user picks one in Display options
 }
+/* Which fields a record shows, and in what order. The card, the text copy and the
+   HTML copy must agree about that, so all three read it from here rather than each
+   walking the field lists its own way. The parts that are the same for every record
+   — which column is the title, the subtitle, the thumbnail — are computed once. */
+function cardCtx(){
+  const imf=imageField();
+  return {tf:titleField(), sub:subtitleField(), imgF:(imf&&!state.hidden.has(imf))?imf:null};
+}
+function recordRows(r,ctx){
+  const {tf,sub,imgF}=ctx;
+  /* only a value that really is a picture becomes the thumbnail; anything else in
+     that column stays an ordinary row rather than a broken image */
+  const iv=imgF&&r?r[imgF]:undefined;
+  const img=(!isMissing(iv)&&typeof iv!=="object"&&isImageValue(iv,imgF))?iv:null;
+  const rows=[], nested=[];
+  for(const k of state.scalarFields){ if(k===tf||k===sub||state.hidden.has(k)) continue;
+    if(k===imgF&&img!==null) continue;                     // shown as the thumbnail instead
+    const v=r?r[k]:undefined; if(isMissing(v)) continue;   // hide empty scalar fields
+    rows.push({k,v,long:isLongText(k)}); }
+  for(const k of state.complexFields){ if(state.hidden.has(k)) continue; const v=r?r[k]:null;
+    const n=Array.isArray(v)?v.length:(v&&typeof v==="object"?Object.keys(v).length:0);
+    if(v==null||n===0) continue;   // skip empty non-scalar fields
+    nested.push({k,v,n}); }
+  /* undefined means "no subtitle": a value that is missing never passes isMissing */
+  return {tv:r?r[tf]:undefined, sub:(sub&&sub!==tf&&r&&!isMissing(r[sub]))?r[sub]:undefined,
+          img, imgKey:imgF, rows, nested};
+}
 function renderCards(){
   $("#cards").className="grid"+(state.viewMode==="full"?" full":"");
-  const tf=titleField();
-  const sub=subtitleField();
-  const full=state.viewMode==="full";
-  const imf=imageField();
-  const imgF=(imf&&!state.hidden.has(imf))?imf:null;
+  const full=state.viewMode==="full", ctx=cardCtx();
   $("#cards").innerHTML=state.pageItems.map((r,idx)=>{
-    const tv=r?r[tf]:undefined;
+    const d=recordRows(r,ctx), tv=d.tv;
     /* a heading that is itself an identifier becomes a link, keeping the heading's own color */
-    const th=(tv!=null&&typeof tv!=="object")?autoLinkFor(tv,tf):null;
+    const th=(tv!=null&&typeof tv!=="object")?autoLinkFor(tv,ctx.tf):null;
     const title=(tv==null)?'<span class="muted">(untitled)</span>'
               : th?linkHTML(th.url,String(tv),linkNote(th),"vlink"):esc(String(tv));
-    const subv=(sub&&sub!==tf&&r&&!isMissing(r[sub]))?'<span class="sub">'+esc(String(r[sub]))+'</span>':'';
-    /* only a value that really is a picture becomes the thumbnail; anything else in
-       that column stays an ordinary row rather than a broken image */
-    const iv=imgF&&r?r[imgF]:undefined;
-    const asImg=!isMissing(iv)&&typeof iv!=="object"&&isImageValue(iv,imgF);
+    const subv=d.sub===undefined?'':'<span class="sub">'+esc(String(d.sub))+'</span>';
     let kv='', lt='', cf='';
-    for(const k of state.scalarFields){ if(k===tf||k===sub||state.hidden.has(k)) continue;
-      if(k===imgF&&asImg) continue;                          // shown as the thumbnail instead
-      const v=r?r[k]:undefined; if(isMissing(v)) continue;   // hide empty scalar fields
-      if(isLongText(k)){
+    for(const {k,v,long} of d.rows){
+      if(long){
         /* A full-width row already gives prose room to read, so print it there and
            skip the expander; on a card it would be a ribbon, so collapse it. */
         lt+= full
@@ -1281,18 +1388,224 @@ function renderCards(){
       }
       kv+='<div class="kv"><span class="k">'+esc(k)+'</span><span class="v">'+renderValue(v,k)+'</span></div>'; }
     if(full) kv='<div class="kvwrap">'+kv+'</div>';
-    for(const k of state.complexFields){ if(state.hidden.has(k)) continue; const v=r?r[k]:null;
-      const n=Array.isArray(v)?v.length:(v&&typeof v==="object"?Object.keys(v).length:0);
-      if(v==null||n===0) continue;   // skip empty non-scalar fields
+    for(const {k,n} of d.nested)
       cf+='<details class="cf" data-idx="'+idx+'" data-field="'+esc(k)+'">'+
           '<summary title="double-click to open this field on every card">'+esc(k)+' ('+n+')</summary>'+
-          '<div class="cf-body" data-rendered="0"></div></details>'; }
-    const img=asImg?imageHTML(iv,tv==null?"":String(tv)):"";
+          '<div class="cf-body" data-rendered="0"></div></details>';
+    const img=d.img!==null?imageHTML(d.img,tv==null?"":String(tv)):"";
     const head='<h3>'+title+' '+subv+'</h3>';
+    const on=state.selected.has(r);
+    const box='<input type="checkbox" class="selbox" data-idx="'+idx+'"'+(on?' checked':'')+
+              ' title="select this record — double-click for every card on the page"'+
+              ' aria-label="Select this record">';
+    const cls='card'+(img?' has-img':'')+(on?' sel':'');
     /* the picture shares the top line with the heading; everything below is full width */
-    return img ? '<div class="card has-img"><div class="cardhead">'+head+img+'</div>'+kv+lt+cf+'</div>'
-               : '<div class="card">'+head+kv+lt+cf+'</div>';
+    return img ? '<div class="'+cls+'"><div class="cardhead">'+head+img+'</div>'+kv+lt+cf+box+'</div>'
+               : '<div class="'+cls+'">'+head+kv+lt+cf+box+'</div>';
   }).join("");
+  renderSelBar();
+}
+
+/* ---------- selection ----------
+   The box in the corner of a card puts that record in the basket the two copy
+   buttons empty. Held by reference, so filtering, sorting and paging cost the
+   selection nothing; kept out of the URL — a shared link carries a view, not a
+   basket, and the records it names might not even be in the reader's file. */
+function renderSelBar(){
+  const n=state.selected.size;
+  $("#selbar").hidden=!n;
+  $("#selCount").textContent=n+" selected";
+}
+function clearSelection(){
+  state.selected.clear();
+  for(const cb of $("#cards").querySelectorAll(".selbox")){
+    cb.checked=false; const c=cb.closest(".card"); if(c) c.classList.remove("sel"); }
+  renderSelBar();
+}
+/* On-screen order first — what you see is the order you paste — then anything
+   selected that the filters are currently hiding, in file order. */
+function selectedRecords(){
+  const sel=state.selected; if(!sel.size) return [];
+  const seen=new Set(), out=[];
+  for(const r of state.filtered) if(sel.has(r)&&!seen.has(r)){ seen.add(r); out.push(r); }
+  for(const r of state.records)  if(sel.has(r)&&!seen.has(r)){ seen.add(r); out.push(r); }
+  return out;
+}
+
+/* ---------- copy as text ----------
+   The card without its markup. HTML collapses runs of whitespace, so this does
+   too: a value hard-wrapped in the source file is not broken on screen, and must
+   not arrive broken in the paste either. */
+const flat = s => String(s).replace(/\s+/g," ").trim();
+const textScalar = v => typeof v==="boolean" ? String(v) : flat(v);
+function textObj(o){
+  const t=o.title||o.name||null;
+  if(t){ const bits=[]; for(const k of ["journal","venue","source","year","date"]) if(o[k]!=null) bits.push(flat(o[k]));
+    return flat(t)+(bits.length?" — "+bits.join(", "):""); }
+  return Object.entries(o).map(([k,v])=>k+": "+
+    (v!==null&&typeof v==="object"?JSON.stringify(v):textScalar(v))).join("; ");
+}
+/* An array of objects gets a line per item; everything else stays on the field's
+   own line. `pad` is the indent the field itself sits at. */
+function textValue(v,pad){
+  if(v===null||v===undefined) return "—";
+  if(Array.isArray(v)){
+    if(!v.length) return "[]";
+    if(!v.some(x=>x!==null&&typeof x==="object")) return v.map(textScalar).join("; ");
+    return "\n"+v.map(x=>pad+"  "+((x!==null&&typeof x==="object")?textObj(x):textScalar(x))).join("\n");
+  }
+  if(typeof v==="object") return textObj(v);
+  return textScalar(v);
+}
+const NOTHING_OFF=new Set();
+/* The text of a copy. By default the SHORT one: only the fields left ticked in the
+   metadata panel's short-copy row — the heading included, since the title and
+   subtitle can be unticked there too. With no heading there is nothing to indent
+   under, so the fields sit at the margin instead; with nothing at all left, the
+   record contributes no block.
+   `full` ignores that choice. The F button needs it: its plain-text flavor is what
+   a plain editor pastes, and it must carry the whole record rather than a copy
+   narrowed for the other button — narrowed to nothing, in the limit. */
+function selectionText(full){
+  const ctx=cardCtx(), off=full?NOTHING_OFF:state.shortOff;
+  const wantT=!off.has(ctx.tf), wantS=ctx.sub!==null&&!off.has(ctx.sub);
+  return selectedRecords().map(r=>{
+    const d=recordRows(r,ctx);
+    const head=(wantT?(d.tv==null?"(untitled)":textScalar(d.tv)):"")+
+      ((wantS&&d.sub!==undefined)?(wantT?" — ":"")+textScalar(d.sub):"");
+    const lines=head?[head]:[], pad=head?"  ":"";
+    /* the picture is a link in text; a data: URI is named, never dumped */
+    if(d.img!==null && !off.has(d.imgKey)) lines.push(pad+d.imgKey+": "+
+      (/^data:/i.test(String(d.img).trim())?"(embedded image)":String(d.img).trim()));
+    for(const {k,v} of d.rows) if(!off.has(k)) lines.push(pad+k+": "+textValue(v,pad));
+    for(const {k,v,n} of d.nested) if(!off.has(k)){ const t=textValue(v,pad);
+      lines.push(pad+k+" ("+n+"):"+(t[0]==="\n"?"":" ")+t); }
+    return lines.join("\n");
+  }).filter(b=>b).join("\n\n");
+}
+
+/* ---------- copy as HTML ----------
+   For pasting into a mail composer. Mail clients drop <style> blocks and class
+   attributes, so every rule is written inline on the element it applies to, and
+   the card's two-column rows become a table — the one layout they all still
+   honor. Nested fields are expanded: an email cannot hold a collapsible section.
+   The card layout is used whatever the View setting, since a mail column is
+   narrow. */
+const M={
+  wrap:"font:14px/1.45 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1d2330",
+  card:"border:1px solid #e3e6ea;border-radius:11px;padding:12px 13px;margin:0 0 12px 0;background:#ffffff",
+  h:"margin:0 0 8px 0;font-size:15px;font-weight:700",
+  sub:"font-weight:500;color:#6b7280;font-size:12px",
+  tbl:"border-collapse:collapse;width:100%",
+  k:"width:140px;color:#6b7280;font-size:12px;vertical-align:top;padding:2px 8px 2px 0;border-top:1px solid #f1f3f5",
+  v:"vertical-align:top;padding:2px 0;border-top:1px solid #f1f3f5;word-break:break-word",
+  link:"color:#2563eb;text-decoration:none",
+  muted:"color:#6b7280",
+  chip:"display:inline-block;background:#eef1f5;border-radius:999px;padding:1px 8px;margin:1px 2px 1px 0;font-size:12px",
+  ltk:"display:block;color:#6b7280;font-size:12px;margin:7px 0 1px",
+  ltv:"line-height:1.55;word-break:break-word",
+  pub:"padding:3px 0;font-size:13px",
+  j:"color:#6b7280;font-size:12px"
+};
+const mailLink=(href,text,note)=>'<a href="'+esc(href)+'"'+(note?' title="'+esc(note)+'"':"")+
+  ' style="'+M.link+'">'+esc(text)+'</a>';
+function mailScalar(v,key){                      // renderScalar, with the styles inlined
+  if(typeof v==="boolean") return '<span style="font-weight:600;color:'+(v?"#15803d":"#b91c1c")+'">'+v+'</span>';
+  const s=String(v), img=isImageURL(s);
+  if(/^https?:\/\//i.test(s)||img){
+    const label=img||s.length>URL_TEXT_MAX;
+    return mailLink(s, label?linkLabel(s,key):s, label&&!/^data:/i.test(s)?s:null);
+  }
+  const hit=autoLinkFor(s,key);
+  return hit ? mailLink(hit.url,s,linkNote(hit)) : esc(s);
+}
+function mailObjLine(o,key){
+  const t=o.title||o.name||null;
+  if(t){ const bits=[]; for(const k of ["journal","venue","source","year","date"]) if(o[k]!=null) bits.push(esc(String(o[k])));
+    return '<div style="'+M.pub+'">'+esc(String(t))+(bits.length?' <span style="'+M.j+'">— '+bits.join(", ")+'</span>':"")+'</div>'; }
+  return '<div style="'+M.pub+'">'+Object.entries(o).map(([k,v])=>esc(k)+": "+
+    (v!==null&&typeof v==="object"?esc(JSON.stringify(v)):mailScalar(v,k))).join("; ")+'</div>';
+}
+function mailValue(v,key){
+  if(v===null||v===undefined) return '<span style="'+M.muted+'">—</span>';
+  if(Array.isArray(v)){
+    if(!v.length) return '<span style="'+M.muted+'">[]</span>';
+    return v.map(x=>(x!==null&&typeof x==="object") ? mailObjLine(x,key)
+      : '<span style="'+M.chip+'">'+mailScalar(x,key)+'</span>').join("");
+  }
+  if(typeof v==="object")
+    return '<table style="'+M.tbl+'">'+Object.entries(v).map(([k,val])=>
+      '<tr><td style="'+M.k+'">'+esc(k)+'</td><td style="'+M.v+'">'+mailValue(val,k)+'</td></tr>').join("")+'</table>';
+  return mailScalar(v,key);
+}
+function selectionHTML(){
+  const ctx=cardCtx();
+  return '<div style="'+M.wrap+'">'+selectedRecords().map(r=>{
+    const d=recordRows(r,ctx), tv=d.tv;
+    const th=(tv!=null&&typeof tv!=="object")?autoLinkFor(tv,ctx.tf):null;
+    const t=(tv==null) ? '<span style="'+M.muted+'">(untitled)</span>'
+          : th ? '<a href="'+esc(th.url)+'" style="color:inherit;text-decoration:none">'+esc(String(tv))+'</a>'
+          : esc(String(tv));
+    const head='<div style="'+M.h+'">'+t+
+      (d.sub===undefined?"":' <span style="'+M.sub+'">'+esc(String(d.sub))+'</span>')+'</div>';
+    /* the thumbnail shares the top line with the heading, as it does on the card */
+    const top=d.img===null ? head
+      : '<table style="'+M.tbl+'"><tr><td style="vertical-align:top">'+head+'</td>'+
+        '<td style="vertical-align:top;width:72px;padding-left:10px"><img src="'+esc(String(d.img))+
+        '" width="72" height="72" alt="" style="width:72px;height:72px;border-radius:10px;'+
+        'object-fit:cover;object-position:50% 0%;display:block"></td></tr></table>';
+    let rows="", lt="", nest="";
+    for(const {k,v,long} of d.rows){
+      if(long){ lt+='<div><span style="'+M.ltk+'">'+esc(k)+':</span><div style="'+M.ltv+'">'+mailValue(v,k)+'</div></div>'; continue; }
+      rows+='<tr><td style="'+M.k+'">'+esc(k)+'</td><td style="'+M.v+'">'+mailValue(v,k)+'</td></tr>'; }
+    for(const {k,v,n} of d.nested)
+      nest+='<div><span style="'+M.ltk+'">'+esc(k)+' ('+n+')</span><div>'+mailValue(v,k)+'</div></div>';
+    return '<div style="'+M.card+'">'+top+(rows?'<table style="'+M.tbl+'">'+rows+'</table>':"")+lt+nest+'</div>';
+  }).join("")+'</div>';
+}
+
+/* ---------- the clipboard ----------
+   Both flavors go on at once and the paste target picks: a mail composer takes the
+   HTML, a plain-text field the text. ClipboardItem needs a secure context (https,
+   or localhost) — opened from file:// there isn't one, hence the fallback, which
+   reaches the same two flavors through a copy event. */
+async function copyOut(text,html){
+  if(navigator.clipboard&&window.ClipboardItem&&window.isSecureContext){
+    try{
+      const items={"text/plain":new Blob([text],{type:"text/plain"})};
+      if(html) items["text/html"]=new Blob([html],{type:"text/html"});
+      await navigator.clipboard.write([new ClipboardItem(items)]);
+      return true;
+    }catch(e){}                                  // denied or unsupported: fall through
+  }
+  return legacyCopy(text,html);
+}
+function legacyCopy(text,html){
+  /* execCommand copies the SELECTION, so there has to be one; the copy handler then
+     replaces whatever the DOM would have produced with the two strings we built. */
+  const box=document.createElement("div");
+  box.setAttribute("contenteditable","true");
+  box.style.cssText="position:fixed;left:-9999px;top:0;white-space:pre-wrap";
+  if(html) box.innerHTML=html; else box.textContent=text;
+  document.body.appendChild(box);
+  const sel=getSelection(), range=document.createRange();
+  range.selectNodeContents(box); sel.removeAllRanges(); sel.addRange(range);
+  const onCopy=e=>{ e.clipboardData.setData("text/plain",text);
+    if(html) e.clipboardData.setData("text/html",html); e.preventDefault(); };
+  document.addEventListener("copy",onCopy);
+  let ok=false; try{ ok=document.execCommand("copy"); }catch(e){}
+  document.removeEventListener("copy",onCopy);
+  sel.removeAllRanges(); box.remove();
+  return ok;
+}
+/* the clipboard is silent about success, so the button says it */
+async function copySelection(btn,full){
+  if(!state.selected.size) return;
+  const ok=await copyOut(selectionText(full), full?selectionHTML():null);
+  btn.classList.remove("ok","bad");
+  void btn.offsetWidth;                          // restart the flash on a second click
+  btn.classList.add(ok?"ok":"bad");
+  setTimeout(()=>btn.classList.remove("ok","bad"),900);
 }
 
 /* ---------- events ---------- */
@@ -1318,6 +1631,34 @@ $("#clauses").addEventListener("click",e=>{
   state.clauses.splice(+b.dataset.clause,1);
   renderClauses(); state.page=0; apply();
 });
+/* Ticking a box must not re-render the page — that would close every expander the
+   reader has opened — so it edits the one card in place. */
+$("#cards").addEventListener("change",e=>{
+  const cb=e.target; if(!cb.classList||!cb.classList.contains("selbox")) return;
+  const r=state.pageItems[+cb.dataset.idx];
+  if(cb.checked) state.selected.add(r); else state.selected.delete(r);
+  const card=cb.closest(".card"); if(card) card.classList.toggle("sel",cb.checked);
+  renderSelBar();
+});
+/* Double-click a box to tick every card on the page — and again to clear them, the
+   way double-clicking an expander opens a field on every card. The two clicks of
+   the double-click cancel each other out on the box you hit, so what is read here
+   is the state you started from. */
+$("#cards").addEventListener("dblclick",e=>{
+  const hit=e.target.closest&&e.target.closest(".selbox"); if(!hit) return;
+  const boxes=[...$("#cards").querySelectorAll(".selbox")];
+  const on=!boxes.every(b=>b.checked);          // all ticked already -> clear them instead
+  for(const b of boxes){
+    const r=state.pageItems[+b.dataset.idx];
+    if(on) state.selected.add(r); else state.selected.delete(r);
+    b.checked=on; const c=b.closest(".card"); if(c) c.classList.toggle("sel",on);
+  }
+  renderSelBar();
+});
+$("#selClear").onclick=clearSelection;
+$("#copyShort").onclick=e=>copySelection(e.currentTarget,false);   // S: text, chosen fields
+$("#copyFull").onclick=e=>copySelection(e.currentTarget,true);     // F: rich HTML, everything shown
+
 $("#cards").addEventListener("toggle",e=>{
   const d=e.target; if(!d.classList.contains("cf")||!d.open) return;
   const body=d.querySelector(".cf-body"); if(body.dataset.rendered==="1") return;
@@ -1339,7 +1680,16 @@ $("#cards").addEventListener("dblclick",e=>{
 
 /* field on/off toggles — delegated, so renderMeta() can rebuild the rows freely */
 $("#metaBody").addEventListener("change",e=>{
-  const cb=e.target, k=cb.dataset&&cb.dataset.fieldtog; if(!k) return;
+  const cb=e.target;
+  /* the short-copy row changes nothing on screen — no apply(), just the URL */
+  const sk=cb.dataset&&cb.dataset.shorttog;
+  if(sk){
+    if(cb.checked) state.shortOff.delete(sk); else state.shortOff.add(sk);
+    cb.closest(".ftog").classList.toggle("off",!cb.checked);
+    const sn=$("#shortNote"); if(sn) sn.textContent=shortNote();
+    syncURL(); return;
+  }
+  const k=cb.dataset&&cb.dataset.fieldtog; if(!k) return;
   if(cb.checked) state.hidden.delete(k); else state.hidden.add(k);
   const chip=cb.closest(".ftog");                            // keep focus: no full re-render
   chip.classList.toggle("off",!cb.checked);
@@ -1347,9 +1697,23 @@ $("#metaBody").addEventListener("change",e=>{
   chip.title=chip.classList.contains("susp")?"its filter is suspended while the field is off":"";
   const n=$("#hidNote"); if(n) n.textContent=hiddenNote();
   const im=$("#imgNote"); if(im) im.innerHTML=imageNote();   // imageNote() escapes its parts
+  /* the same field in the short-copy row below: switched off here, it is in no copy
+     either, and saying so there is the point of that greying */
+  for(const b of document.querySelectorAll("#metaBody [data-shorttog]"))
+    if(b.dataset.shorttog===k){
+      const c=b.closest(".ftog"); c.classList.toggle("gone",!cb.checked);
+      c.title=cb.checked?"":"the field is switched off, so no copy shows it";
+    }
   syncFieldUI(); apply();      // a suspended filter changes what matches
 });
 $("#metaBody").addEventListener("click",e=>{
+  const s=e.target.closest("button[data-stog]");
+  if(s){                                       // "none" takes the heading out as well
+    state.shortOff.clear();
+    if(s.dataset.stog==="none")
+      for(const k of state.scalarFields.concat(state.complexFields)) state.shortOff.add(k);
+    renderMeta(); syncURL(); return;
+  }
   const b=e.target.closest("button[data-tog]"); if(!b) return;
   const list=b.dataset.group==="complex"?state.complexFields:state.scalarFields;
   const tf=titleField(), sub=subtitleField();

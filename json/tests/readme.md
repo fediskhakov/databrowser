@@ -44,10 +44,11 @@ specificity, event delegation, layout at a given viewport.
 | `test-messy` | page | hostile JSON — `messy-test.json`: a primitive among the records, a `__proto__` field name, an empty field name, mixed arrays |
 | `test-ortip` | page | the OR button's help tooltip stays reachable while the button is disabled |
 | `test-numfacet` | page | numeric facet ordering as it reaches the screen, including under a live filter |
+| `test-select` | page | the select boxes and the two copy buttons: where the box lands, double-click taking the page, the bar appearing, selection surviving filter/sort/page, both copy formats, and the short-copy field row (heading included) round-tripping through `h2` |
 
 Fixtures live one level up beside the viewer, so the same server serves both:
 `link-test.json`, `image-test.json`, `sort-test.json`, `text-test.json`,
-`messy-test.json`, and the real `econ_departments.json`.
+`messy-test.json`, `copy-test.json`, and the real `econ_departments.json`.
 
 ## Two traps worth knowing
 
@@ -60,3 +61,10 @@ application code. Real user events bubble; pass `{bubbles: true}`.
 breakpoint where the sidebar folds away — so filter panels are not in the DOM and
 every sidebar assertion fails. Page suites set a wider window explicitly; keep
 doing so, or set it via `Emulation.setDeviceMetricsOverride`.
+
+**The clipboard needs a user gesture.** `navigator.clipboard.write` and
+`document.execCommand("copy")` both refuse without transient user activation, which
+a bare `Runtime.evaluate` does not carry — pass `userGesture: true` for the click
+that copies, and grant `clipboardReadWrite` with `Browser.grantPermissions`.
+Otherwise the copy silently fails and the button reports it, which reads like a
+broken feature rather than a missing test flag.

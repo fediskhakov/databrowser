@@ -20,7 +20,7 @@ SELF_DIR=$(cd -- "$(dirname -- "$0")" && pwd)
 SERVE_DIR=$(cd -- "$SELF_DIR/.." && pwd)     # the json/ directory: viewer + fixtures
 
 UNIT_SUITES="test-links test-images test-sort test-text test-url test-numsort"
-PAGE_SUITES="test-interaction test-messy test-ortip test-numfacet"
+PAGE_SUITES="test-interaction test-messy test-ortip test-numfacet test-select"
 
 NODE=$(command -v node) || { printf '%s\n' "error: node not found" >&2; exit 2; }
 PY=$(command -v python3 || command -v python) || { printf '%s\n' "error: python3 not found" >&2; exit 2; }
