@@ -88,11 +88,21 @@
   .ftog.fixed{cursor:default;background:var(--accent-soft);color:var(--muted)}
   .ftog.susp{color:var(--accent);opacity:.85}   /* off, but still holds a filter */
   .ftog.gone{opacity:.4}                        /* the field is off everywhere, so this says nothing */
-  /* the copy glyph again at label size, marking the row as the S button's */
-  .metabody .ico{width:15px;height:15px;fill:none;stroke:var(--accent);stroke-width:1.7;
-                 stroke-linejoin:round;vertical-align:-3px;margin-right:5px}
-  .metabody .ico .sheet{fill:var(--panel)}
-  .metabody .ico text{stroke:none;fill:var(--accent);font-size:8.5px;font-weight:700}
+  /* the copy glyph at label size — on the short-copy row, and on the button that
+     copies the filters in words. The front sheet takes the panel colour, so the one
+     behind stops at its edge exactly as it does on the blue buttons. */
+  .ico{width:15px;height:15px;fill:none;stroke:var(--accent);stroke-width:1.7;
+       stroke-linejoin:round;vertical-align:-3px}
+  .metabody .ico{margin-right:5px}
+  .ico .sheet{fill:var(--panel)}
+  .ico text{stroke:none;fill:var(--accent);font-size:8.5px;font-weight:700}
+  .icobtn{display:inline-flex;align-items:center;padding:2px 7px}
+  /* the same confirmation the copy buttons give, on a white button */
+  .mini.ok{background:var(--ok);border-color:var(--ok)}
+  .mini.bad{background:var(--no);border-color:var(--no)}
+  .mini.ok .ico,.mini.bad .ico{stroke:#fff}
+  .mini.ok .ico .sheet{fill:var(--ok)}
+  .mini.bad .ico .sheet{fill:var(--no)}
   .togacts{display:inline-flex;gap:3px;margin-right:8px;vertical-align:1px}
   .togacts .mini{padding:1px 6px;font-size:11px}
   .side h2{font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:10px 4px 6px}
@@ -264,6 +274,13 @@
       <button class="mini" id="collapseAll">Collapse all</button>
       <!-- the help sits on the wrapper: a disabled button never shows its own tooltip,
            and this one is disabled exactly when nothing is filtered yet -->
+      <button class="mini icobtn" id="copyFilters"
+              title="Copy a description of the current filters, in words">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="8.5" y="2.5" width="12.5" height="15.5" rx="2.5"/>
+          <rect class="sheet" x="3" y="6" width="12.5" height="15.5" rx="2.5"/>
+        </svg>
+      </button>
       <span class="ortip" title="OR — show records matching ANY of several filter sets.
 
 Set up filters, then press OR: they are saved as a set and the panels clear, ready for the next one. A record is shown if it matches any saved set, or the panels you are filling in now.
@@ -1422,13 +1439,16 @@ function clearSelection(){
     cb.checked=false; const c=cb.closest(".card"); if(c) c.classList.remove("sel"); }
   renderSelBar();
 }
-/* On-screen order first — what you see is the order you paste — then anything
-   selected that the filters are currently hiding, in file order. */
+/* The order the page is sorted in — one rule, whether or not a record is on screen
+   at this moment. Starting from file order and applying the page's own comparator
+   reproduces the on-screen order exactly for everything visible (a stable sort over
+   a subsequence keeps its relative order), and drops a selected record the filters
+   are currently hiding into its proper place rather than at the end. */
 function selectedRecords(){
   const sel=state.selected; if(!sel.size) return [];
-  const seen=new Set(), out=[];
-  for(const r of state.filtered) if(sel.has(r)&&!seen.has(r)){ seen.add(r); out.push(r); }
-  for(const r of state.records)  if(sel.has(r)&&!seen.has(r)){ seen.add(r); out.push(r); }
+  const out=state.records.filter(r=>sel.has(r));
+  const levels=activeSorts();
+  if(levels.length) out.sort((x,y)=>cmpMulti(x,y,levels));
   return out;
 }
 
@@ -1599,13 +1619,48 @@ function legacyCopy(text,html){
   return ok;
 }
 /* the clipboard is silent about success, so the button says it */
-async function copySelection(btn,full){
-  if(!state.selected.size) return;
-  const ok=await copyOut(selectionText(full), full?selectionHTML():null);
+function flash(btn,ok){
   btn.classList.remove("ok","bad");
   void btn.offsetWidth;                          // restart the flash on a second click
   btn.classList.add(ok?"ok":"bad");
   setTimeout(()=>btn.classList.remove("ok","bad"),900);
+}
+async function copySelection(btn,full){
+  if(!state.selected.size) return;
+  flash(btn, await copyOut(selectionText(full), full?selectionHTML():null));
+}
+
+/* ---------- the filters, in words ----------
+   What is on screen and why, for pasting into a note or a message beside the
+   records themselves. Built from liveTerms(), so a filter suspended because its
+   field is switched off is absent here exactly as it is absent from the result —
+   the description can only ever describe what actually applied. */
+function termText(k,f){
+  const bits=[...f.vals];                        // values within a field are OR-ed
+  if(f.present) bits.push("not missing");
+  if(f.missing) bits.push("missing");
+  return k+": "+bits.join(" or ");
+}
+const setText = terms => terms.map(([k,f])=>termText(k,f)).join(", and ");
+function describeFilters(){
+  const live=liveTerms(), cs=state.clauses;
+  const out=[(state.fileName||"(no file loaded)")+" — "+
+    state.filtered.length.toLocaleString()+" of "+state.records.length.toLocaleString()+" records"];
+  if(state.search) out.push("", "search: "+state.search);
+  if(!cs.length){
+    if(live.length) out.push("", setText(live).split(", and ").join("\n"));
+    else if(!state.search) out.push("", "no filters — every record is shown");
+  }else{
+    /* each saved set, then the panels as one more — which is how they combine */
+    out.push("", "any of these sets:");
+    cs.forEach((c,i)=>{
+      const hits=state.clauseHits&&state.clauseHits[i], uniq=state.clauseUniq&&state.clauseUniq[i];
+      out.push("  "+(i+1)+". "+setText(c.terms)+
+        (hits==null?"":"   ("+hits.toLocaleString()+" records, "+uniq.toLocaleString()+" only here)"));
+    });
+    if(live.length) out.push("  "+(cs.length+1)+". "+setText(live)+"   (the panels, as they stand)");
+  }
+  return out.join("\n");
 }
 
 /* ---------- events ---------- */
@@ -1625,6 +1680,10 @@ $("#orFilter").onclick=()=>{
   state.clauses.push(makeClause(spec));
   clearLiveFilters();
   renderClauses(); state.page=0; apply();
+};
+$("#copyFilters").onclick=async e=>{
+  const btn=e.currentTarget;
+  flash(btn, await copyOut(describeFilters(), null));
 };
 $("#clauses").addEventListener("click",e=>{
   const b=e.target.closest("button[data-clause]"); if(!b) return;

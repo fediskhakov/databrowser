@@ -72,8 +72,9 @@ object or array is **nested**, and appears as a collapsible expander instead.
 - **Header** — the **☰** panel button, filename, **search** box, live record count,
   pagination (hidden when *Records per page* is `all`), and — once something is
   ticked — the [selection bar](#selecting-and-copying).
-- **Left panel** — **Sort**, **Filters** (its buttons, any saved filter sets, then a
-  collapsible panel per scalar field), and **Display** options.
+- **Left panel** — **Sort**, **Filters** (its buttons — including **⧉**, which
+  [copies the filters in words](#copying-the-filters-in-words) — any saved filter
+  sets, then a collapsible panel per scalar field), and **Display** options.
 - **Main area** — the collapsed *Metadata & dataset info* panel, then the records.
 
 **Small screens.** ☰ folds the panel away entirely. Below 820px the layout stacks
@@ -177,6 +178,31 @@ The global **search** stays outside the sets, narrowing whatever they produce, a
 the facet counts keep describing the set you are *building*, so the panels remain
 usable for composing the next one. A saved set is static: it keeps applying even if
 one of its fields is later switched off.
+
+### Copying the filters in words
+
+The **⧉** button in the filter pane's button row copies a plain-text description of
+what is currently filtered — for pasting into a note or a message beside the records
+themselves, so the numbers you quote come with the question they answer:
+
+```
+econ_departments.json — 158 of 379 records
+
+search: school
+
+any of these sets:
+  1. country: United States or Canada, and category: economics_dept   (9 records, 0 only here)
+  2. country: United Kingdom   (26 records, 0 only here)
+  3. repec_authors: not missing   (the panels, as they stand)
+```
+
+Values within a field are joined with **or** and fields with **and**, matching how
+they actually combine; saved sets are listed as the union they are, each with the
+same two counts its chip shows, and the panels appear last as one more set. Without
+saved sets it is simply the count and a line per field. It describes only what
+*applied*: a filter [suspended](#switching-fields-on-and-off) because its field is
+switched off is absent here exactly as it is absent from the result. The button is
+never disabled — "no filters — every record is shown" is a description too.
 
 ---
 
@@ -330,9 +356,14 @@ clears the selection.
 
 **What is copied** is what the cards show: the same fields, in the same order,
 honoring [switched-off fields](#switching-fields-on-and-off), the chosen title and
-subtitle, and the picture column. Empty fields are left out, as on screen. The
-records come in the order you see them, and a selected record the filters are
-currently hiding is appended after those.
+subtitle, and the picture column. Empty fields are left out, as on screen.
+
+**The records come out in the order the page is sorted** — one rule, whether or not
+a record is on screen at the moment you press the button. Change the sort and the
+next copy follows it. A selected record that the current filters hide takes its
+place in that order too, rather than being tacked on at the end, so narrowing the
+view to find the next record to tick never disturbs the order of what you already
+have.
 
 **The selection follows its records, not their positions.** Filter, sort, page or
 search all you like: what you ticked stays ticked, and a record hidden by a filter

@@ -44,7 +44,8 @@ specificity, event delegation, layout at a given viewport.
 | `test-messy` | page | hostile JSON — `messy-test.json`: a primitive among the records, a `__proto__` field name, an empty field name, mixed arrays |
 | `test-ortip` | page | the OR button's help tooltip stays reachable while the button is disabled |
 | `test-numfacet` | page | numeric facet ordering as it reaches the screen, including under a live filter |
-| `test-select` | page | the select boxes and the two copy buttons: where the box lands, double-click taking the page, the bar appearing, selection surviving filter/sort/page, both copy formats, and the short-copy field row (heading included) round-tripping through `h2` |
+| `test-select` | page | the select boxes and the two copy buttons: where the box lands, double-click taking the page, the bar appearing, selection surviving filter/sort/page, copies following the page's sort even for records the filters hide, both copy formats, and the short-copy field row (heading included) round-tripping through `h2` |
+| `test-describe` | page | the filter pane's **⧉** button: the description's three shapes (nothing set, panels only, saved OR sets), that a suspended filter is never described, and that the clipboard gets exactly what was described |
 
 Fixtures live one level up beside the viewer, so the same server serves both:
 `link-test.json`, `image-test.json`, `sort-test.json`, `text-test.json`,

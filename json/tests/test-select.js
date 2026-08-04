@@ -107,7 +107,32 @@ const ok=(c,m)=>{ if(c) pass++; else { fail++; console.log("  FAIL "+m); } };
   await sleep(200);
   ok(await ev(`[...document.querySelectorAll('#cards .selbox')].findIndex(b=>b.checked)`)===2,
      "sorting moves the tick with its record");
-  await ev(`state.sorts=[]; state.sortSig=null; apply()`); await sleep(200);
+
+  /* One ordering rule, not two: the copy follows the page's sort whether or not a
+     record happens to be on screen when the button is pressed. Pick a record that
+     sorts LAST, then hide it behind a search and pick one that sorts FIRST. */
+  await ev(`state.sorts=[{k:'name',desc:false}]; state.sortSig=null; state.selected.clear(); apply()`);
+  await sleep(250);
+  await ev(`state.search='turing'; document.querySelector('#globalSearch').value='turing'; apply()`);
+  await sleep(250);
+  await tick(0); await sleep(150);                       // Alan Turing — sorts last of the three
+  await ev(`state.search='ada'; document.querySelector('#globalSearch').value='ada'; apply()`);
+  await sleep(250);
+  await tick(0); await sleep(150);                       // Ada Lovelace — sorts first, Turing now hidden
+  ok(await nsel()===2, "two selected, one of them filtered out of view");
+  ok(await ev(`JSON.stringify(selectedRecords().map(r=>r.name))`)==='["Ada Lovelace","Alan Turing"]',
+     "the hidden one takes its place in the sort rather than being tacked on the end");
+  await ev(`state.sorts=[{k:'name',desc:true}]; state.sortSig=null; apply()`); await sleep(250);
+  ok(await ev(`JSON.stringify(selectedRecords().map(r=>r.name))`)==='["Alan Turing","Ada Lovelace"]',
+     "and reversing the sort reverses the copy");
+  await ev(`state.search=''; document.querySelector('#globalSearch').value='';
+            state.sorts=[]; state.sortSig=null; state.selected.clear(); apply()`);
+  await sleep(250);
+  await tick(2); await tick(0); await sleep(200);        // ticked out of order, no sort
+  ok(await ev(`JSON.stringify(selectedRecords().map(r=>r.name))`)==='["Ada Lovelace","Alan Turing"]',
+     "with no sort it is file order, not the order they were ticked in");
+  await ev(`state.selected.clear(); apply()`); await sleep(200);
+  await tick(0); await sleep(150);
 
   console.log("\n== the short copy ==");
   await ev(`document.querySelector('#subField').value='role';
