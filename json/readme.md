@@ -72,8 +72,9 @@ object or array is **nested**, and appears as a collapsible expander instead.
 ## Layout
 
 - **Header** — the **☰** panel button, filename, **search** box, live record count,
-  pagination (hidden when *Records per page* is `all`), and — once something is
-  ticked — the [selection bar](#selecting-and-copying).
+  pagination (hidden when *Records per page* is `all`), then — once something is
+  ticked — the [selection bar](#selecting-and-copying), and the [notes](#notes)
+  button at the far right.
 - **Left panel** — **Sort**, **Filters** (its buttons — including **⧉**, which
   [copies the filters in words](#copying-the-filters-in-words) — any saved filter
   sets, then a collapsible panel per scalar field), and **Display** options.
@@ -357,6 +358,13 @@ no double-click, and for the keyboard, which cannot make one. It reads like the
 header checkbox of a table: ticked when the whole page is selected, part-way when
 only some of it is, and clicking it takes or gives back the page.
 
+**From the keyboard**, once focus is on any record's checkbox, **Tab** moves down the
+records from one checkbox to the next — not through the links and expanders on each
+card — wrapping at the end, and **Space** ticks the one it lands on. That makes
+picking records a single pass with two keys. **Escape** steps back out of the run,
+leaving what you picked. This works whether or not the [note](#notes) boxes are
+showing; a checkbox in focus always means the record-picking pass.
+
 The two blue buttons copy the selected records to the clipboard: **S** is the
 *short* copy — plain text, carrying only the fields you
 [chose for it](#choosing-what-the-short-copy-prints) — and **F** the *full* one,
@@ -365,7 +373,8 @@ clears the selection.
 
 **What is copied** is what the cards show: the same fields, in the same order,
 honoring [switched-off fields](#switching-fields-on-and-off), the chosen title and
-subtitle, and the picture column. Empty fields are left out, as on screen.
+subtitle, and the picture column. Empty fields are left out, as on screen. Any
+[note](#notes) on a record goes with it, last.
 
 **The records come out in the order the page is sorted** — one rule, whether or not
 a record is on screen at the moment you press the button. Change the sort and the
@@ -437,6 +446,80 @@ that is refused the button flashes red instead of green. Either way the result i
 also announced in words — "Copied 2 records as text" — through a live region, since
 a colour is no use to a screen reader and green against red is the pair colourblind
 readers most often cannot separate.
+
+---
+
+## Notes
+
+The **✎** button at the right-hand end of the header — last, so the selection bar
+appearing does not move it — puts a note box on every record. It runs the full width
+of the card, below every field and above the select box, which keeps its corner
+however tall the note grows. One line to start with, growing as you fill it. No
+caption: the box is the whole of it.
+
+The button is green throughout — it is the notes' button, and green is the notes'
+colour — and reads as the toggle it is: **outlined while the boxes are hidden, filled
+while they are up**. The icon says what a click will do:
+
+| Button | Meaning | What clicking does |
+|---|---|---|
+| outlined green, **✎** pencil and sheet | the boxes are hidden | shows them |
+| filled green, **✎** | the boxes are up, nothing unsaved | hides them again |
+| filled green, **↓** arrow | notes edited since the last save | writes them to a file |
+
+The arrow means there is something to save, so an unsaved note is visible from the
+header and the way to deal with it is the same button. Once the file is written the
+arrow goes back to being the toggle, and stays that way until the next edit. The
+darker green is only ever a hover, in every state, so it is never mistaken for one.
+
+The card you are writing on is **washed in pale green** while the cursor is in its
+box, so it is clear which note you are typing into on a wide grid of cards.
+
+**While the boxes are up, Tab walks them and nothing else** — down the page from one
+note to the next, wrapping at the end, shift-Tab back the other way. Writing notes is
+the job at hand, and every link and control in between would otherwise take a turn.
+**Escape** steps out; everything is still reachable by pointer; and hiding the boxes
+gives ordinary tabbing back.
+
+### One colour, one meaning
+
+**Green is notes and blue is the selection**, and neither borrows the other's colour.
+The notes button is green, its boxes are bordered in the same green, and a card wears
+it while you type into that card. Selected cards, their checkboxes and the two copy
+buttons are blue, and a copy confirms itself with a lighter shade of that blue rather
+than a green tick. The **⧉** button that copies the
+[filter description](#copying-the-filters-in-words) is neither a selection nor a
+note, so it takes neither colour: a plain button whose confirmation is its glyph
+darkening against a pale grey, not a colour it has no business wearing.
+
+**The file** is the [short copy](#choosing-what-the-short-copy-prints) of every
+record that carries a note — in the order the page is sorted, like every other copy
+— with the note added as a final `notes` field. Plain text, handed to the browser as
+a download named after the data (`econ_departments-notes.txt`). A note's own line
+breaks are kept, indented to hang under the value; every other field is formatted
+exactly as the **S** button formats it.
+
+```
+Ada Lovelace — Analyst
+  orcid: 0000-0002-1825-0097
+  notes: check the 1843 date against the Menabrea
+         translation
+```
+
+**Both copy buttons carry the notes too**, without being asked. Untick `notes` in
+the short-copy field row to keep them out of **S**; the **F** copy prints everything,
+notes included, with the line breaks preserved. If the data already has a field
+called `notes` the added one is labelled `notes (added)`, so the two never merge.
+
+Notes are **not** written to the URL, and they do not survive a reload — they are the
+reader's own marks on a view, not data. Consequently:
+
+- Leaving the page with unsaved notes raises the browser's own "leave site?" prompt.
+  That dialog belongs to the browser: a page cannot put *download* and *discard*
+  buttons in it, so all it can do is give you the chance to stay.
+- The actions this page performs itself **can** offer the choice, and do. Loading
+  another file, dropping one on the window, or changing the main record array asks
+  first, and offers to download the notes, discard them, or cancel.
 
 ---
 
@@ -513,6 +596,8 @@ hand them to the browser.
 - A copied selection is a snapshot of the display, not of the data: it holds what
   the cards show, not the fields you switched off, and no JSON structure. The short
   copy narrows that further, to the fields ticked for it.
+- [Notes](#notes) live in the page, not in the file or the link. Save them before
+  you close the tab; nothing else will keep them.
 
 ## Files
 

@@ -40,6 +40,11 @@ const ok=(c,m)=>{ if(c) pass++; else { fail++; console.log("  FAIL "+m); } };
      "carrying the copy glyph");
   ok(await ev(`!document.querySelector('#copyFilters svg text')`),
      "without a letter — the S and F ones are the lettered pair");
+  /* blue is the selection's, green is the notes'; the filters are neither */
+  ok(await ev(`getComputedStyle(document.querySelector('#copyFilters .ico')).stroke`)==="rgb(107, 114, 128)",
+     "and in no colour at all — neither the selection's blue nor the notes' green");
+  ok(await ev(`getComputedStyle(document.querySelector('#copyFilters')).backgroundColor`)==="rgb(255, 255, 255)",
+     "on an ordinary white button");
 
   console.log("\n== nothing set ==");
   let d = await desc();
@@ -101,6 +106,12 @@ const ok=(c,m)=>{ if(c) pass++; else { fail++; console.log("  FAIL "+m); } };
      "the clipboard holds exactly the description");
   ok(await ev(`document.querySelector('#copyFilters').classList.contains('ok')`),
      "and the button confirms it");
+  /* quietly: the glyph darkens against a grey the panel already uses. It must not go
+     black, and it must not borrow the selection's blue or the notes' green. */
+  const fill = await ev(`getComputedStyle(document.querySelector('#copyFilters')).backgroundColor`);
+  ok(fill==="rgb(238, 241, 245)", `staying pale while it does — got ${fill}`);
+  ok(await ev(`getComputedStyle(document.querySelector('#copyFilters .ico')).stroke`)==="rgb(29, 35, 48)",
+     "with only the glyph darkening");
   await sleep(1000);
   ok(!(await ev(`document.querySelector('#copyFilters').classList.contains('ok')`)),
      "the confirmation fades");

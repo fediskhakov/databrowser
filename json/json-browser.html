@@ -10,6 +10,10 @@
   :root{
     --bg:#f4f5f7; --panel:#fff; --ink:#1d2330; --muted:#6b7280; --line:#e3e6ea;
     --accent:#2563eb; --accent-soft:#e8f0fe; --chip:#eef1f5; --ok:#15803d; --no:#b91c1c;
+    /* Two colours with one meaning each: green is notes, blue is the selection.
+       Nothing else may borrow either of them. */
+    --ok-soft:#d6f0dd; --ok-pale:#f3fbf6;    /* the notes' green, at ring and wash weight */
+    --accent-lite:#60a5fa;                   /* the selection's blue, for a moment's confirmation */
   }
   *{box-sizing:border-box}
   html,body{margin:0;height:100%}
@@ -32,6 +36,21 @@
   .app.sidehidden{grid-template-columns:0 1fr}
   .app.sidehidden aside.side{display:none}
   #sideToggle{font-size:14px;line-height:1;padding:5px 9px;flex:none}
+  /* Green throughout — it is the notes' button, and green is the notes' colour — and
+     a true toggle: outlined while the boxes are hidden, filled while they are up.
+     The darker green is only ever a hover, in both states, so it never reads as a
+     third one. The download job changes the icon, not the colour. */
+  #noteBtn{flex:none;padding:5px 8px;line-height:0;
+           background:#fff;border-color:var(--ok);color:var(--ok)}
+  #noteBtn:hover{background:var(--ok-pale);border-color:#166534;color:#166534}
+  #noteBtn svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.7;
+               stroke-linecap:round;stroke-linejoin:round;display:block}
+  #noteBtn .ico-save{display:none}
+  #noteBtn.on{background:var(--ok);border-color:var(--ok);color:#fff}
+  #noteBtn.on:hover{background:#166534;border-color:#166534}
+  /* unsaved notes: it stops being a toggle and becomes the way to save them */
+  #noteBtn.dirty .ico-note{display:none}
+  #noteBtn.dirty .ico-save{display:block}
   @media (max-width:820px){
     /* Stack instead of squeeze: the panel becomes a band above the records. Both
        selectors, or .app.sidehidden's two-column rule would outrank this one and
@@ -73,9 +92,10 @@
   .copybtn svg .sheet{fill:var(--accent)}
   /* centred in the front sheet: the letter is what tells the two buttons apart */
   .copybtn svg text{stroke:none;fill:currentColor;font-size:8.5px;font-weight:700}
-  /* a moment's confirmation — the clipboard gives no other sign it worked */
-  .copybtn.ok{background:var(--ok);border-color:var(--ok)}
-  .copybtn.ok svg .sheet{fill:var(--ok)}
+  /* a moment's confirmation — the clipboard gives no other sign it worked. A lighter
+     shade of the selection's own blue, never green: green belongs to the notes */
+  .copybtn.ok{background:var(--accent-lite);border-color:var(--accent-lite)}
+  .copybtn.ok svg .sheet{fill:var(--accent-lite)}
   .copybtn.bad{background:var(--no);border-color:var(--no)}
   .copybtn.bad svg .sheet{fill:var(--no)}
   details.meta{margin-bottom:10px;background:var(--panel);border:1px solid var(--line);border-radius:10px}
@@ -102,12 +122,19 @@
   .ico .sheet{fill:var(--panel)}
   .ico text{stroke:none;fill:var(--accent);font-size:8.5px;font-weight:700}
   .icobtn{display:inline-flex;align-items:center;padding:2px 7px}
-  /* the same confirmation the copy buttons give, on a white button */
-  .mini.ok{background:var(--ok);border-color:var(--ok)}
+  /* The filter description is neither a selection nor a note, so it takes neither
+     colour — an ordinary button. Its confirmation stays quiet too: the glyph darkens
+     against a grey the panel already uses, rather than the button turning a colour
+     it has no business wearing. A failure is the one thing worth shouting. */
+  #copyFilters .ico{stroke:var(--muted)}
+  #copyFilters:hover .ico{stroke:var(--ink)}
+  .mini.ok{background:var(--chip);border-color:#c7ccd3}
   .mini.bad{background:var(--no);border-color:var(--no)}
-  .mini.ok .ico,.mini.bad .ico{stroke:#fff}
-  .mini.ok .ico .sheet{fill:var(--ok)}
-  .mini.bad .ico .sheet{fill:var(--no)}
+  /* by id, or the resting #copyFilters rule above outranks these and nothing changes */
+  #copyFilters.ok .ico{stroke:var(--ink)}
+  #copyFilters.ok .ico .sheet{fill:var(--chip)}
+  #copyFilters.bad .ico{stroke:#fff}
+  #copyFilters.bad .ico .sheet{fill:var(--no)}
   .togacts{display:inline-flex;gap:3px;margin-right:8px;vertical-align:1px}
   .togacts .mini{padding:1px 6px;font-size:11px}
   .side h2{font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:10px 4px 6px}
@@ -166,7 +193,19 @@
      in the same corner in both views without adding a row of its own. */
   .selbox{position:absolute;right:11px;bottom:8px;width:15px;height:15px;margin:0;
           cursor:pointer;accent-color:var(--accent)}
+  .selbox:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   .card.sel{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+  /* the card being written on, washed in the notes' own green — after .sel, so a
+     selected card still shows which one has the cursor in it */
+  .card.noting{background:var(--ok-pale);border-color:var(--ok);box-shadow:0 0 0 1px var(--ok)}
+  /* A line of its own, the full width of the card and below everything else, so the
+     select box keeps its corner however tall the note grows. One line to start with;
+     the height is set from its own scrollHeight as it fills. */
+  .note{display:block;width:100%;margin-top:9px;font:inherit;font-size:13px;color:inherit;
+        border:1px solid var(--ok);border-radius:7px;padding:4px 7px;background:#fff;
+        resize:none;overflow:hidden;line-height:1.4}
+  .note:focus{outline:none;box-shadow:0 0 0 2px var(--ok-soft)}
+  .note.has{background:#fbfefb}
   /* image field: one square thumbnail per record, same size everywhere, scaled to
      the viewport. It shares the top line with the heading, pinned to the right —
      so nothing sits above the title and every row underneath is full width. */
@@ -227,6 +266,14 @@
   /* why the file named in ?file= never arrived — the alternative is a blank page
      that looks the same whether the link was wrong or no link was given at all */
   .loaderr{max-width:460px;margin:10px auto 0;color:var(--no);word-break:break-word}
+  /* the notes guard: the one place the choice can actually be offered */
+  .guard{position:fixed;inset:0;background:rgba(16,24,40,.45);display:flex;
+         align-items:center;justify-content:center;z-index:30;padding:16px}
+  .guard[hidden]{display:none}
+  .gbox{background:var(--panel);border-radius:12px;padding:18px 20px;max-width:440px;
+        box-shadow:0 12px 40px rgba(16,24,40,.25)}
+  .gmsg{margin-bottom:14px;line-height:1.5}
+  .gacts{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
   #emptyUrlLoad{background:#0d9488;border-color:#0d9488}        /* teal: load by URL */
   #emptyUrlLoad:hover{background:#0f766e;border-color:#0f766e}
   #emptyLoad{background:var(--accent);border-color:var(--accent)}  /* blue: load file */
@@ -275,6 +322,20 @@
         </svg>
       </button>
     </span>
+    <!-- last, so it keeps the right-hand end whether or not the selection bar is up.
+         One button, two jobs: while there is nothing to save it shows the note boxes
+         and hides them again; the moment a note is edited it becomes the way to save
+         them, and goes back to being a toggle once they are downloaded. -->
+    <button id="noteBtn" aria-pressed="false" title="Add a note to each record">
+      <svg class="ico-note" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M14.5 3H6.5A1.5 1.5 0 0 0 5 4.5v15A1.5 1.5 0 0 0 6.5 21h6"/>
+        <path d="M8.5 7.5h6M8.5 11h6M8.5 14.5h3"/>
+        <path d="M19.4 12.6l2 2-5 5-2.6.6.6-2.6z"/>
+      </svg>
+      <svg class="ico-save" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 3.5v11"/><path d="M7.5 10L12 14.5 16.5 10"/><path d="M4.5 19.5h15"/>
+      </svg>
+    </button>
   </header>
 
   <aside class="side" id="side">
@@ -362,6 +423,19 @@ Each saved set shows how many records it matches, and after × how many would di
      words, for a screen reader and for anyone who cannot tell the two colours apart.
      Outside the selection bar, which is hidden between copies. -->
 <span id="copyStatus" class="sr" role="status" aria-live="polite"></span>
+<!-- Leaving the page can only ever raise the browser's own generic prompt, so the
+     three-way choice lives here, on the in-page actions that would really discard
+     notes: loading another file, dropping one, changing the record array. -->
+<div id="guard" class="guard" hidden>
+  <div class="gbox" role="dialog" aria-modal="true" aria-labelledby="guardMsg">
+    <div class="gmsg" id="guardMsg"></div>
+    <div class="gacts">
+      <button class="primary" id="guardSave">Download notes first</button>
+      <button id="guardDiscard">Discard the notes</button>
+      <button id="guardCancel">Cancel</button>
+    </div>
+  </div>
+</div>
 
 <script>
 "use strict";
@@ -400,6 +474,11 @@ const state = {
      sorting and paging then cost the selection nothing. Deliberately not in the URL. */
   selected:new Set(),
   shortOff:new Set(),    // fields left out of the short copy (URL: h2), as hidden is of the page
+  /* Notes the reader writes on the records. Held by reference like the selection,
+     and like it kept out of the URL — a note is the reader's own, and a link is not
+     the place to carry it. They live only until the page is closed, so notesDirty
+     drives both the button's icon and the warning on the way out. */
+  notes:new Map(), notesOn:false, notesDirty:false,
   base:[],               // what matches, in file order; filtered is this, ordered
   filtered:[], pageItems:[], restoring:false,
   /* apply() skips the work whose inputs have not changed; these say what it did.
@@ -700,6 +779,9 @@ function setRecordSource(key, keepSearch){
   state.hidden.clear(); state.clauses=[];                         // field names differ per array
   state.selected.clear();                        // the basket held records of the old array
   state.shortOff.clear();
+  /* the notes belonged to records that are gone; whoever got us here has already
+     offered to save them */
+  state.notes.clear(); state.notesDirty=false; renderNoteBtn();
   state.page=0; if(!keepSearch){ state.search=""; $("#globalSearch").value=""; }
   populateFieldSelects();
   renderMeta(); renderFilters(); renderClauses(); apply();
@@ -772,7 +854,10 @@ const shortNote = () => state.shortOff.size ? "   — "+state.shortOff.size+" le
    they cannot leave the card, but a short copy may well want neither. A field
    switched off above is in no copy at all, so it is shown greyed out here. */
 function shortRow(){
-  const fields=state.scalarFields.concat(state.complexFields);
+  /* the notes are offered here too, once any exist: they are copied by default, and
+     this is the one place to say otherwise */
+  const fields=state.scalarFields.concat(state.complexFields)
+    .concat(state.notes.size?[NOTE_LABEL()]:[]);
   if(!fields.length) return "";
   const chips=fields.map(k=>{
     const on=!state.shortOff.has(k);
@@ -1496,16 +1581,26 @@ function renderCards(){
     const img=d.img!==null?imageHTML(d.img,tv==null?"":String(tv)):"";
     const head='<h3>'+title+' '+subv+'</h3>';
     const on=state.selected.has(r);
+    const note=state.notes.get(r)||"";
+    /* the note goes after every other field and before the select box's strip */
+    const nb=state.notesOn
+      ? '<textarea class="note'+(note?" has":"")+'" rows="1" data-idx="'+idx+'"'+
+        ' aria-label="Note on this record" placeholder="note…">'+esc(note)+'</textarea>' : '';
     const box='<input type="checkbox" class="selbox" data-idx="'+idx+'"'+(on?' checked':'')+
-              ' title="select this record — double-click for every card on the page"'+
-              ' aria-label="Select this record">';
+      ' title="select this record — double-click for every card on the page"'+
+      ' aria-label="Select this record">';
     const cls='card'+(img?' has-img':'')+(on?' sel':'');
     /* the picture shares the top line with the heading; everything below is full width */
-    return img ? '<div class="'+cls+'"><div class="cardhead">'+head+img+'</div>'+kv+lt+cf+box+'</div>'
-               : '<div class="'+cls+'">'+head+kv+lt+cf+box+'</div>';
+    return img ? '<div class="'+cls+'"><div class="cardhead">'+head+img+'</div>'+kv+lt+cf+nb+box+'</div>'
+               : '<div class="'+cls+'">'+head+kv+lt+cf+nb+box+'</div>';
   }).join("");
+  /* a textarea cannot size itself to its content, so every one of them is measured
+     once here — and again on each keystroke */
+  if(state.notesOn) $("#cards").querySelectorAll(".note").forEach(growNote);
   renderSelBar();
 }
+/* one line while it holds one line, taller as it fills */
+function growNote(ta){ ta.style.height="auto"; ta.style.height=ta.scrollHeight+"px"; }
 
 /* ---------- selection ----------
    The box in the corner of a card puts that record in the basket the two copy
@@ -1578,6 +1673,51 @@ function textValue(v,pad){
   if(typeof v==="object") return textObj(v);
   return textScalar(v);
 }
+/* ---------- notes ----------
+   A line of the reader's own against any record. They are not data: they never
+   reach the URL, they are not filtered or sorted on, and they last only as long as
+   the page is open — which is why leaving with unsaved ones is worth a warning.
+   Both copies carry them, and so does the file the button writes. */
+const NOTE_LABEL = () => state.fields.includes("notes") ? "notes (added)" : "notes";
+const noteOf = r => state.notes.get(r)||"";
+/* something to save: an edit that emptied the last note leaves nothing to write */
+const notesPending = () => state.notesDirty && state.notes.size>0;
+function renderNoteBtn(){
+  const b=$("#noteBtn"), dirty=notesPending();
+  b.classList.toggle("dirty",dirty);
+  b.classList.toggle("on",state.notesOn);   // green means the boxes are up, saved or not
+  b.setAttribute("aria-pressed",String(state.notesOn));
+  b.title = dirty
+    ? "Download "+state.notes.size+(state.notes.size===1?" note":" notes")+" as a text file"
+    : state.notesOn ? "Hide the note boxes" : "Add a note to each record";
+}
+function setNotesOn(on){
+  state.notesOn=on;
+  renderCards();                 // the boxes are part of the card, not an overlay
+  renderNoteBtn();
+}
+/* Records carrying a note, in the order the page is sorted — the same rule the
+   copies follow, so a saved file and a pasted copy agree. */
+function notedRecords(){
+  if(!state.notes.size) return [];
+  const out=state.records.filter(r=>state.notes.has(r));
+  const levels=activeSorts();
+  if(levels.length) out.sort((x,y)=>cmpMulti(x,y,levels));
+  return out;
+}
+function downloadNotes(){
+  const text=blocksText(notedRecords(),false,true);
+  const base=(state.fileName||"records").replace(/^.*[\\/]/,"").replace(/\.json$/i,"");
+  const a=document.createElement("a");
+  const url=URL.createObjectURL(new Blob([text],{type:"text/plain;charset=utf-8"}));
+  a.href=url; a.download=base+"-notes.txt";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+  state.notesDirty=false;        // written out; the button goes back to being a toggle
+  renderNoteBtn();
+  $("#copyStatus").textContent="Saved "+state.notes.size+" notes to "+a.download;
+}
+
 const NOTHING_OFF=new Set();
 /* The text of a copy. By default the SHORT one: only the fields left ticked in the
    metadata panel's short-copy row — the heading included, since the title and
@@ -1587,10 +1727,11 @@ const NOTHING_OFF=new Set();
    `full` ignores that choice. The F button needs it: its plain-text flavor is what
    a plain editor pastes, and it must carry the whole record rather than a copy
    narrowed for the other button — narrowed to nothing, in the limit. */
-function selectionText(full){
+function blocksText(records,full,alwaysNote){
   const ctx=cardCtx(), off=full?NOTHING_OFF:state.shortOff;
   const wantT=!off.has(ctx.tf), wantS=ctx.sub!==null&&!off.has(ctx.sub);
-  return selectedRecords().map(r=>{
+  const nk=NOTE_LABEL(), wantN=alwaysNote||!off.has(nk);
+  return records.map(r=>{
     const d=recordRows(r,ctx);
     const head=(wantT?(d.tv==null?"(untitled)":textScalar(d.tv)):"")+
       ((wantS&&d.sub!==undefined)?(wantT?" — ":"")+textScalar(d.sub):"");
@@ -1601,9 +1742,16 @@ function selectionText(full){
     for(const {k,v} of d.rows) if(!off.has(k)) lines.push(pad+k+": "+textValue(v,pad));
     for(const {k,v,n} of d.nested) if(!off.has(k)){ const t=textValue(v,pad);
       lines.push(pad+k+" ("+n+"):"+(t[0]==="\n"?"":" ")+t); }
+    /* Last, and the one value whose own line breaks are kept: a note is written by
+       hand, so its shape is the reader's rather than the data's. Continuation lines
+       are indented to sit under the first. */
+    const note=wantN?noteOf(r).trim():"";
+    if(note) lines.push(pad+nk+": "+
+      note.replace(/\r?\n/g,"\n"+pad+" ".repeat(nk.length+2)));   // hanging, under the value
     return lines.join("\n");
   }).filter(b=>b).join("\n\n");
 }
+const selectionText = full => blocksText(selectedRecords(),full,false);
 
 /* ---------- copy as HTML ----------
    For pasting into a mail composer. Mail clients drop <style> blocks and class
@@ -1681,6 +1829,11 @@ function selectionHTML(){
       rows+='<tr><td style="'+M.k+'">'+esc(k)+'</td><td style="'+M.v+'">'+mailValue(v,k)+'</td></tr>'; }
     for(const {k,v,n} of d.nested)
       nest+='<div><span style="'+M.ltk+'">'+esc(k)+' ('+n+')</span><div>'+mailValue(v,k)+'</div></div>';
+    /* the note keeps its line breaks here too — pre-wrap is the one white-space
+       value mail clients honour reliably */
+    const note=noteOf(r).trim();
+    if(note) nest+='<div><span style="'+M.ltk+'">'+esc(NOTE_LABEL())+'</span>'+
+      '<div style="'+M.ltv+';white-space:pre-wrap">'+esc(note)+'</div></div>';
     return '<div style="'+M.card+'">'+top+(rows?'<table style="'+M.tbl+'">'+rows+'</table>':"")+lt+nest+'</div>';
   }).join("")+'</div>';
 }
@@ -1814,6 +1967,53 @@ $("#cards").addEventListener("dblclick",e=>{
   const boxes=[...$("#cards").querySelectorAll(".selbox")];
   setPageSelection(!boxes.every(b=>b.checked));  // all ticked already -> clear them instead
 });
+/* typing a note: the card is not re-rendered — that would take the caret with it */
+$("#cards").addEventListener("input",e=>{
+  const ta=e.target; if(!ta.classList||!ta.classList.contains("note")) return;
+  const r=state.pageItems[+ta.dataset.idx], t=ta.value;
+  if(t.trim()) state.notes.set(r,t); else state.notes.delete(r);
+  ta.classList.toggle("has",!!t.trim());
+  state.notesDirty=true;
+  growNote(ta); renderNoteBtn();
+  const sn=$("#shortNote"); if(sn) renderMeta();   // the notes chip comes and goes with them
+});
+/* Two jobs, decided by whether there is anything to save. Nothing pending: it shows
+   the boxes and hides them again. Something pending: it writes the file, and goes
+   back to being a toggle once it has. */
+$("#noteBtn").onclick=()=>{ if(notesPending()) downloadNotes(); else setNotesOn(!state.notesOn); };
+/* Highlight the card being written on: which box has the cursor is otherwise easy to
+   lose on a wide grid. Delegated focusin/focusout rather than :has(), which the rest
+   of the file also does without. */
+$("#cards").addEventListener("focusin",e=>{
+  const t=e.target; if(!t.classList||!t.classList.contains("note")) return;
+  const c=t.closest(".card"); if(c) c.classList.add("noting");
+});
+$("#cards").addEventListener("focusout",e=>{
+  const t=e.target; if(!t.classList||!t.classList.contains("note")) return;
+  const c=t.closest(".card"); if(c) c.classList.remove("noting");
+});
+
+/* Tab down one column of the cards rather than through everything on them.
+   From a select box it walks the select boxes — the record-picking pass — and Space
+   ticks the one it lands on, as it does for any checkbox. Otherwise, while the note
+   boxes are up, it walks those: writing notes down a page is the job at hand, and
+   every link and control in between would take a turn. Escape steps out of either;
+   the pointer reaches everything as usual, and with the notes hidden Tab is
+   ordinary again. The guard dialog keeps its own tab order. */
+document.addEventListener("keydown",e=>{
+  if(!$("#guard").hidden) return;
+  const a=document.activeElement, cl=a&&a.classList;
+  const onBox=!!(cl&&cl.contains("selbox")), onNote=!!(cl&&cl.contains("note"));
+  if(e.key==="Escape"&&(onBox||onNote)){ a.blur(); return; }
+  if(e.key!=="Tab") return;
+  const pick = onBox ? ".selbox" : (state.notesOn ? ".note" : null);
+  if(!pick) return;
+  const list=[...$("#cards").querySelectorAll(pick)];
+  if(!list.length) return;
+  e.preventDefault();
+  const i=list.indexOf(a), n=list.length;
+  list[i<0 ? (e.shiftKey?n-1:0) : (e.shiftKey?(i-1+n)%n:(i+1)%n)].focus();
+});
 $("#selPage").onchange=e=>setPageSelection(e.target.checked);
 $("#selClear").onclick=clearSelection;
 $("#copyShort").onclick=e=>copySelection(e.currentTarget,false);   // S: text, chosen fields
@@ -1874,8 +2074,10 @@ $("#metaBody").addEventListener("click",e=>{
   const s=e.target.closest("button[data-stog]");
   if(s){                                       // "none" takes the heading out as well
     state.shortOff.clear();
-    if(s.dataset.stog==="none")
-      for(const k of state.scalarFields.concat(state.complexFields)) state.shortOff.add(k);
+    if(s.dataset.stog==="none")                // the notes only when there are any, as the row offers them
+      for(const k of state.scalarFields.concat(state.complexFields)
+                       .concat(state.notes.size?[NOTE_LABEL()]:[]))
+        state.shortOff.add(k);
     renderMeta(); syncURL(); return;
   }
   const b=e.target.closest("button[data-tog]"); if(!b) return;
@@ -1905,7 +2107,11 @@ $("#globalSearch").addEventListener("input",e=>{
                          state.records.length>2000 ? 150 : 0);
 });
 $("#pageSize").addEventListener("change",e=>{ state.pageSize=e.target.value==="all"?"all":+e.target.value; state.page=0; apply(); });
-$("#recordArray").addEventListener("change",e=>setRecordSource(e.target.value,false));
+$("#recordArray").addEventListener("change",async e=>{
+  const key=e.target.value;
+  if(!await notesLetGo("changing the record array")){ e.target.value=state.recordKey; return; }
+  setRecordSource(key,false);
+});
 /* a field promoted to the heading or the card image stops being hidden — the two
    would contradict — which can also bring its filter panel back, hence apply() */
 function pickField(sel,v){ state[sel]=v; state.hidden.delete(v); renderMeta(); renderClauses(); syncFieldUI(); apply(); }
@@ -1940,10 +2146,42 @@ showSide(!NARROW.matches);
 NARROW.addEventListener("change",e=>showSide(!e.matches));
 $("#sideToggle").onclick=()=>showSide($(".app").classList.contains("sidehidden"));
 
+/* ---------- guarding unsaved notes ----------
+   Leaving the page can only ever raise the browser's own prompt — a page cannot put
+   its own buttons in that dialog, so "download or discard" is not on offer there.
+   Where it IS on offer is here: the actions the page performs itself, each of which
+   would throw the notes away, since they belong to records that are about to go. */
+let guardAnswer=null;
+function askAboutNotes(what){
+  if(!notesPending()) return Promise.resolve("go");
+  $("#guardMsg").textContent=state.notes.size+(state.notes.size===1?" note has":" notes have")+
+    " not been saved, and "+what+" will discard "+(state.notes.size===1?"it":"them")+".";
+  $("#guard").hidden=false;
+  $("#guardSave").focus();
+  return new Promise(r=>{ guardAnswer=r; });
+}
+function answerGuard(a){ $("#guard").hidden=true; const r=guardAnswer; guardAnswer=null; if(r) r(a); }
+$("#guardSave").onclick=()=>answerGuard("save");
+$("#guardDiscard").onclick=()=>answerGuard("discard");
+$("#guardCancel").onclick=()=>answerGuard("cancel");
+$("#guard").addEventListener("keydown",e=>{ if(e.key==="Escape") answerGuard("cancel"); });
+/* true if the caller may go ahead */
+async function notesLetGo(what){
+  const a=await askAboutNotes(what);
+  if(a==="cancel") return false;
+  if(a==="save") downloadNotes();
+  return true;                   // setRecordSource clears the notes either way
+}
+window.addEventListener("beforeunload",e=>{
+  if(!notesPending()) return;
+  e.preventDefault(); e.returnValue="";   // the wording is the browser's, not ours
+});
+
 function pickFile(){ $("#fileInput").click(); }
 $("#loadBtn").onclick=pickFile; $("#emptyLoad").onclick=pickFile;
-function loadFromURL(url){
+async function loadFromURL(url){
   url=(url||"").trim(); if(!url) return;
+  if(!await notesLetGo("loading another file")) return;
   fetch(url,{cache:"no-store"})
     .then(res=>{ if(!res.ok) throw new Error("HTTP "+res.status+" "+res.statusText); return res.json(); })
     .then(data=>{ loadData(data,url); $("#urlInput").value=url; })
@@ -1953,8 +2191,9 @@ $("#urlLoadBtn").onclick=()=>loadFromURL($("#urlInput").value);
 $("#urlInput").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); loadFromURL(e.target.value); } });
 $("#emptyUrlLoad").onclick=()=>loadFromURL($("#emptyUrlInput").value);
 $("#emptyUrlInput").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); loadFromURL(e.target.value); } });
-function readFile(f){
+async function readFile(f){
   if(!f) return;
+  if(!await notesLetGo("loading another file")) return;
   const rd=new FileReader();
   rd.onload=()=>{ try{ loadData(JSON.parse(rd.result),f.name); }
                   catch(err){ alert("Could not read "+f.name+":\n"+err.message); } };

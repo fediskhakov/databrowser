@@ -292,6 +292,10 @@ const ok=(c,m)=>{ if(c) pass++; else { fail++; console.log("  FAIL "+m); } };
   await ev(`document.querySelector('#copyShort').click()`,true); await sleep(500);
   ok(await ev(`document.querySelector('#copyShort').classList.contains('ok')`),
      "the short button reports success");
+  /* green now means notes and nothing else, so the copy confirmation is a lighter
+     shade of the selection's own blue */
+  ok(await ev(`getComputedStyle(document.querySelector('#copyShort')).backgroundColor`)==="rgb(96, 165, 250)",
+     "the confirmation is a lighter blue, not green");
   const cs = JSON.parse(await ev(clip));
   ok(cs.types==="text/plain", "S puts plain text on the clipboard, and only that");
   ok(cs.text===await ev(`selectionText()`) && !cs.text.includes("homepage:"),
@@ -387,6 +391,32 @@ const ok=(c,m)=>{ if(c) pass++; else { fail++; console.log("  FAIL "+m); } };
      "the other records were never touched");
   ok((await ev(`document.querySelector('#cards .selbox').title`)).includes("double-click"),
      "the box's tooltip says so");
+
+  console.log("\n== the keyboard can pick records on its own ==");
+  await ev(`document.querySelector('#selClear').click()`); await sleep(200);
+  const kb = (key,shift) => ev(`(()=>{const e=new KeyboardEvent('keydown',
+     {key:${JSON.stringify(key)},bubbles:true,cancelable:true,shiftKey:${!!shift}});
+     document.dispatchEvent(e); return e.defaultPrevented;})()`);
+  const boxIdx = () => ev(`[...document.querySelectorAll('#cards .selbox')].indexOf(document.activeElement)`);
+  await ev(`document.querySelectorAll('#cards .selbox')[0].focus()`); await sleep(150);
+  ok(await kb("Tab")===true, "from a select box, Tab is taken over");
+  ok(await boxIdx()===1, "and goes to the next record's box, not to whatever is on the card");
+  await kb("Tab"); ok(await boxIdx()===2, "and the next");
+  await kb("Tab"); ok(await boxIdx()===0, "wrapping at the end");
+  await kb("Tab",true); ok(await boxIdx()===2, "shift-Tab the other way");
+  /* Space is the browser's own doing on a checkbox — what matters is that nothing
+     here swallows it, and that the change handler picks the record up */
+  await ev(`(()=>{const b=document.activeElement;
+             b.checked=!b.checked; b.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+  await sleep(250);
+  ok(await nsel()===1, "Space on the focused box selects that record");
+  ok(await ev(`document.querySelectorAll('#cards .card')[2].classList.contains('sel')`),
+     "and marks its card");
+  ok(await boxIdx()===2, "and the focus stays on it");
+  await kb("Escape"); await sleep(150);
+  ok(await boxIdx()===-1, "Escape steps out of the run rather than trapping the keyboard in it");
+  ok(await nsel()===1, "without undoing what was picked");
+  await ev(`document.querySelector('#selClear').click()`); await sleep(200);
 
   console.log("\n== the same gesture, for touch and the keyboard ==");
   /* double-click does not exist on touch and cannot be typed; the box in the bar is
