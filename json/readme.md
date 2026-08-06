@@ -483,14 +483,20 @@ gives ordinary tabbing back.
 
 ### One colour, one meaning
 
-**Green is notes and blue is the selection**, and neither borrows the other's colour.
-The notes button is green, its boxes are bordered in the same green, and a card wears
-it while you type into that card. Selected cards, their checkboxes and the two copy
-buttons are blue, and a copy confirms itself with a lighter shade of that blue rather
-than a green tick. The **⧉** button that copies the
+**Green is notes, blue is the selection, and orange is loading**, and none of the
+three borrows another's colour. The notes button is green, its boxes are bordered in
+the same green, and a card wears it while you type into that card. Selected cards,
+their checkboxes and the two copy buttons are blue, and a copy confirms itself with a
+lighter shade of that blue rather than a green tick. The **⧉** button that copies the
 [filter description](#copying-the-filters-in-words) is neither a selection nor a
 note, so it takes neither colour: a plain button whose confirmation is its glyph
 darkening against a pale grey, not a colour it has no business wearing.
+
+**The two ways in wear two shades of the one orange** — the deeper for the file,
+the amber for the URL — so the pair is told apart by hue before the labels are read.
+They wear them in both places that load: on the empty screen and in the
+**load JSON** row of the metadata panel. Orange is loading and nothing else, which is
+why neither button takes the selection's blue any more.
 
 **The file** is the [short copy](#choosing-what-the-short-copy-prints) of every
 record that carries a note — in the order the page is sorted, like every other copy

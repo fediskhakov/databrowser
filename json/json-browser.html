@@ -10,10 +10,11 @@
   :root{
     --bg:#f4f5f7; --panel:#fff; --ink:#1d2330; --muted:#6b7280; --line:#e3e6ea;
     --accent:#2563eb; --accent-soft:#e8f0fe; --chip:#eef1f5; --ok:#15803d; --no:#b91c1c;
-    /* Two colours with one meaning each: green is notes, blue is the selection.
-       Nothing else may borrow either of them. */
+    /* Three colours with one meaning each: green is notes, blue is the selection,
+       orange is loading. Nothing else may borrow any of them. */
     --ok-soft:#d6f0dd; --ok-pale:#f3fbf6;    /* the notes' green, at ring and wash weight */
     --accent-lite:#60a5fa;                   /* the selection's blue, for a moment's confirmation */
+    --load:#ea580c; --load-alt:#d97706;      /* loading: the file itself, and by URL */
   }
   *{box-sizing:border-box}
   html,body{margin:0;height:100%}
@@ -274,10 +275,16 @@
         box-shadow:0 12px 40px rgba(16,24,40,.25)}
   .gmsg{margin-bottom:14px;line-height:1.5}
   .gacts{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
-  #emptyUrlLoad{background:#0d9488;border-color:#0d9488}        /* teal: load by URL */
-  #emptyUrlLoad:hover{background:#0f766e;border-color:#0f766e}
-  #emptyLoad{background:var(--accent);border-color:var(--accent)}  /* blue: load file */
-  #emptyLoad:hover{background:#1d4ed8;border-color:#1d4ed8}
+  /* Loading is a job of its own, so it takes a colour of its own: orange, borrowed
+     from neither the selection nor the notes. Two shades, one per way in — the
+     deeper orange for the file, the amber for the URL — so the pair is told apart
+     by hue and not by reading the labels. The darker step is only ever a hover.
+     Both places that load wear the same two, so the rule holds off the empty
+     screen as well as on it. */
+  #emptyLoad,#loadBtn{background:var(--load);border-color:var(--load);color:#fff}
+  #emptyLoad:hover,#loadBtn:hover{background:#c2410c;border-color:#c2410c}
+  #emptyUrlLoad,#urlLoadBtn{background:var(--load-alt);border-color:var(--load-alt);color:#fff}
+  #emptyUrlLoad:hover,#urlLoadBtn:hover{background:#b45309;border-color:#b45309}
 </style>
 </head>
 <body>
