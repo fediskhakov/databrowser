@@ -89,7 +89,7 @@ const chrome = spawn(CHROME, ["--headless", "--disable-gpu", `--remote-debugging
   const labels = await evaluate(`[...document.querySelectorAll('#sortField option')].map(o => o.textContent)`);
   ok(labels[0] === "(file order)", "first option is (file order)");
   ok(labels.length === 1 + 12 * 2, `every active field appears twice (${labels.length} options for 12 fields)`);
-  ok(labels[1] === "repec_id ▲" && labels[2] === "repec_id ▼",
+  ok(labels[1] === "repec_id ▴" && labels[2] === "repec_id ▾",
      "ascending then descending, adjacent: " + labels.slice(1, 5).join(" / "));
   ok(await evaluate(`[...document.querySelectorAll('#sortField option')]
        .filter(o => o.dataset.desc === '1').length`) === 12, "half of them carry the descending flag");
@@ -148,7 +148,7 @@ const chrome = spawn(CHROME, ["--headless", "--disable-gpu", `--remote-debugging
     if(await evaluate(`document.querySelectorAll('#cards .card').length`)) break;
     await sleep(200);
   }
-  ok(await evaluate(`document.querySelector('#sortField').selectedOptions[0].textContent`) === "world_rank ▼",
+  ok(await evaluate(`document.querySelector('#sortField').selectedOptions[0].textContent`) === "world_rank ▾",
      "a shared link restores the field AND the direction");
   const reloaded = (await column("world_rank")).map(Number);
   ok(reloaded.every((v, i) => i === 0 || v <= reloaded[i-1]), "with the records ordered accordingly");
@@ -163,7 +163,7 @@ const chrome = spawn(CHROME, ["--headless", "--disable-gpu", `--remote-debugging
   ok(url.includes("sd=world_rank"), "the choice is remembered in the URL");
   await evaluate(`document.querySelector('[data-fieldtog="world_rank"]').click()`);
   await sleep(300);
-  ok(await evaluate(`document.querySelector('#sortField').selectedOptions[0].textContent`) === "world_rank ▼",
+  ok(await evaluate(`document.querySelector('#sortField').selectedOptions[0].textContent`) === "world_rank ▾",
      "switching it back on resumes the same field and direction");
   ok(JSON.stringify((await column("world_rank")).map(Number)) === JSON.stringify(reloaded), "with the same order");
 
@@ -255,7 +255,7 @@ const chrome = spawn(CHROME, ["--headless", "--disable-gpu", `--remote-debugging
     if(await evaluate(`document.querySelectorAll('#cards .card').length`)) break;
     await sleep(200);
   }
-  ok(JSON.stringify((await chosen()).slice(0, 2)) === JSON.stringify(["country ▲", "university ▼"]),
+  ok(JSON.stringify((await chosen()).slice(0, 2)) === JSON.stringify(["country ▴", "university ▾"]),
      "a shared link restores every level and its direction: " + JSON.stringify(await chosen()));
   const c3 = await col("country"), u3 = await col("university");
   ok(JSON.stringify(c3) === JSON.stringify(c2) && JSON.stringify(u3) === JSON.stringify(u2),
@@ -301,7 +301,7 @@ const chrome = spawn(CHROME, ["--headless", "--disable-gpu", `--remote-debugging
   ok(await evaluate(`document.querySelector('#titleField').value`) === "university" &&
      await evaluate(`document.querySelector('#subField').value`) === "country",
      "old title=/sub= links still work");
-  ok(await evaluate(`document.querySelector('#sortField').selectedOptions[0].textContent`) === "world_rank ▼",
+  ok(await evaluate(`document.querySelector('#sortField').selectedOptions[0].textContent`) === "world_rank ▾",
      "and so do old sort=/desc= links");
   su2 = await evaluate("location.search");
   ok(su2.includes("t=university") && su2.includes("st=country") && su2.includes("sd=world_rank"),
@@ -744,7 +744,7 @@ const chrome = spawn(CHROME, ["--headless", "--disable-gpu", `--remote-debugging
   }
   const titles = () => evaluate(`[...document.querySelectorAll('#cards .card h3')].map(h => h.textContent.trim())`);
   const opts = await evaluate(`[...document.querySelectorAll('#sortField option')].map(o => o.textContent)`);
-  ok(opts.filter(o => o.startsWith("name")).join(" / ") === "name ▲ / name ▼ / name (last word) ▲ / name (last word) ▼",
+  ok(opts.filter(o => o.startsWith("name")).join(" / ") === "name ▴ / name ▾ / name (last word) ▴ / name (last word) ▾",
      "the name field gets two extra options: " + opts.filter(o => o.startsWith("name")).join(" / "));
   ok(opts.filter(o => o.startsWith("field")).length === 2, "an ordinary field still gets exactly two");
   ok(opts.filter(o => o.startsWith("born")).length === 2, "and so does a numeric one");
@@ -787,7 +787,7 @@ const chrome = spawn(CHROME, ["--headless", "--disable-gpu", `--remote-debugging
     if(await evaluate(`document.querySelectorAll('#cards .card').length`)) break;
     await sleep(200);
   }
-  ok(await evaluate(`document.querySelector('#sortField').selectedOptions[0].textContent`) === "name (last word) ▲",
+  ok(await evaluate(`document.querySelector('#sortField').selectedOptions[0].textContent`) === "name (last word) ▴",
      "a shared link restores the last-word mode");
   ok(JSON.stringify(await titles()) === JSON.stringify(surname), "with the same order");
 
@@ -798,7 +798,7 @@ const chrome = spawn(CHROME, ["--headless", "--disable-gpu", `--remote-debugging
     if(await evaluate(`document.querySelectorAll('#cards .card').length`)) break;
     await sleep(200);
   }
-  ok(await evaluate(`document.querySelector('#sortField').selectedOptions[0].textContent`) === "field ▲",
+  ok(await evaluate(`document.querySelector('#sortField').selectedOptions[0].textContent`) === "field ▴",
      "last=1 on a non-name field degrades to the ordinary ascending sort");
 
   console.log("\n== long text fields as full-width expanders ==");

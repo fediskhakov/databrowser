@@ -92,7 +92,7 @@ width.
 ## Sorting
 
 The **Sort** dropdown orders records by any switched-on field. Every field is listed
-twice — `world_rank ▲` ascending, `world_rank ▼` descending. `(file order)` is the
+twice — `world_rank ▴` ascending, `world_rank ▾` descending. `(file order)` is the
 default.
 
 **Ties open another level.** If the chosen field has repeated values, a second
@@ -101,9 +101,9 @@ levels above left tied:
 
 ```
 SORT
-  country ▲
-    category ▲
-      world_rank ▼
+  country ▴
+    category ▴
+      world_rank ▾
 ```
 
 A level is offered only while ties remain — a unique field ends the cascade at once
@@ -151,6 +151,36 @@ Each switched-on scalar field gets a collapsible panel:
 
 Within a field values are **OR**-ed; across fields, **AND**-ed. **Reset filters**
 clears everything, saved sets and search included.
+
+### Search
+
+The **search** box in the header matches every field of every record — nested and
+switched-off ones included — case-insensitively. The **▼** button inside the box
+opens a small menu choosing between three matching modes; the box's own tooltip
+always states the rules of whichever mode is on.
+
+**Exact text** (the default): the whole query — spaces, quotes and all — matches
+as one literal substring, so `york boston` finds only records containing exactly
+that string, and `york` finds every record mentioning it anywhere.
+
+**Any word**: the query is a list of terms, and a record is shown when **any**
+term occurs anywhere in it:
+
+- words separated by spaces are separate terms, so `york boston` finds records
+  containing either word;
+- `"double quotes"` make an exact phrase, spaces included: `"new york"` finds
+  only records where the two words appear together in one field — the way to
+  *require* words jointly rather than accept each on its own;
+- words and phrases mix freely, each one more alternative: `"new york" "boston
+  college" oxford` shows records matching any of the three.
+
+**Whole field**: the same terms, OR-ed the same way, but a term has to *be* a
+field rather than occur in one — `york` keeps a record whose city is exactly
+York and drops one merely named *University of York*. Multi-word values are
+asked for in `"quotes"`, as above; in an array field each element counts as one
+whole value, so `jesuit` matches a record tagged `["private","jesuit"]` while
+the bracketed list itself never matches. It is the search-box equivalent of
+picking a value out of a filter panel, over every field at once.
 
 ### Honest faceting
 
@@ -538,7 +568,8 @@ Every filter, sort and display change is written back into the address bar via
 |-----------|---------|
 | `file` | Path or URL of the JSON to load |
 | `rec` | Record-array key (only when the file has more than one array) |
-| `q` | Global search string |
+| `q` | Global search query, [quotes and all](#search) |
+| `qm` | The search box's [matching mode](#search): `terms` for any-word, `whole` for whole-field (omitted in the default exact-text mode) |
 | `sa` / `sd` | A sort level, ascending or descending. Repeatable — levels apply in the order they appear |
 | `sla` / `sld` | The same, by [last word](#sorting) |
 | `ps` | Records per page; omitted when `100` |

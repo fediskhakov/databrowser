@@ -65,8 +65,26 @@
   @media (max-width:520px){ #sideToggle .lbl{display:none} }
   input,select,button{font:inherit;color:inherit}
   .ctl{display:flex;gap:6px;align-items:center}
-  .ctl.grow{flex:1 1 auto;min-width:200px}
-  .ctl.grow input[type=search]{width:100%}
+  .ctl.grow{flex:1 1 auto;min-width:200px;position:relative}
+  /* room on the right for the ▼ that lives inside the box; WebKit's native clear ✕
+     respects the padding, so the two do not collide */
+  .ctl.grow input[type=search]{width:100%;padding-right:30px}
+  /* the ▼ search-options menu: a details, so open/close needs no state of its own.
+     It overlays the input's right edge, reading as the input's own dropdown arrow;
+     the panel hangs just below it */
+  .smenu{position:absolute;right:5px;top:50%;transform:translateY(-50%)}
+  /* no chip, no border: the glyph alone, drawn big and dark enough to be seen
+     against the box it sits in */
+  .smenu>summary{list-style:none;cursor:pointer;padding:0 4px;user-select:none;
+                 color:var(--ink);font-size:12px;line-height:1}
+  .smenu>summary::-webkit-details-marker{display:none}
+  .smenu>summary:hover,.smenu[open]>summary{color:var(--accent)}
+  .smenu-body{position:absolute;right:0;top:calc(100% + 7px);z-index:20;background:#fff;
+              border:1px solid var(--line);border-radius:9px;padding:9px 11px;
+              box-shadow:0 4px 14px rgba(0,0,0,.12);display:flex;flex-direction:column;gap:7px;
+              font-size:12px;white-space:nowrap}
+  .smenu-body label{display:flex;gap:7px;align-items:center;cursor:pointer}
+  .smenu-body input{margin:0;accent-color:var(--accent)}
   input[type=search],input[type=url],input.fsearch{border:1px solid var(--line);border-radius:7px;padding:6px 9px;background:#fff;min-width:160px}
   select,button{border:1px solid var(--line);border-radius:7px;padding:6px 9px;background:#fff;cursor:pointer}
   button:hover,select:hover{border-color:#c7ccd3}
@@ -294,7 +312,17 @@
             title="Show or hide sort, filters and display options">☰<span class="lbl"> Filters</span></button>
     <h1>JSON DB Viewer</h1>
     <span id="fileName" class="muted"></span>
-    <span class="ctl grow"><input type="search" id="globalSearch" placeholder="Search all fields…"></span>
+    <span class="ctl grow">
+      <input type="search" id="globalSearch" placeholder="Search all fields…">
+      <details class="smenu" id="searchMenu">
+        <summary title="How the search box matches">▼</summary>
+        <div class="smenu-body">
+          <label><input type="radio" name="searchMode" value="plain" checked> exact text — the whole query as one string</label>
+          <label><input type="radio" name="searchMode" value="terms"> any word — OR-ed, "quotes" for exact phrases</label>
+          <label><input type="radio" name="searchMode" value="whole"> whole field — any word, matching a field entirely</label>
+        </div>
+      </details>
+    </span>
     <span class="count"><span id="resCount">0</span> records</span>
     <span class="pager">
       <button id="first">«</button><button id="prev">‹</button>
@@ -470,7 +498,7 @@ const state = {
   facetVal:{}, facetMiss:{}, facetPres:{},   // live, recomputed each apply()
   filters:{},            // field -> {vals:Set, missing:bool, present:bool}   (the live set)
   clauses:[],            // saved filter sets, OR-ed with each other and with the live one
-  search:"", pageSize:100, page:0,
+  search:"", searchMode:"plain", pageSize:100, page:0,   // searchMode: "plain" | "terms" | "whole" — the ▼ menu
   sorts:[],              // [{k,desc,last}] — level 1 first, each breaking the one above
   titleSel:null, subSel:null, viewMode:"cards",
   hidden:new Set(),      // fields switched off in the metadata panel (display only)
@@ -908,7 +936,7 @@ function syncFieldUI(){
    At most three levels: past that the ordering is doing more than a reader can
    follow, and every extra select costs sidebar room.
    One per level, plus one more while the order is still undecided, so the cascade
-   grows only as far as the data needs. Each field appears twice (▲ ascending, ▼
+   grows only as far as the data needs. Each field appears twice (▴ ascending, ▾
    descending); the direction rides on a data attribute rather than inside the
    value, so a field name keeps its own characters whatever they are. */
 function sortOptions(sel,level){
@@ -921,18 +949,18 @@ function sortOptions(sel,level){
       /* usesLastWord, not sel.last: a stale last=1 on a field that has no last-word
          options degrades to the plain ascending one rather than matching nothing */
       const on=(desc,last)=> sel&&sel.k===k&&!!sel.desc===desc&&usesLastWord(sel)===last ? " selected" : "";
-      return o+on(false,false)+'>'+esc(k)+' ▲</option>'+
-             o+' data-desc="1"'+on(true,false)+'>'+esc(k)+' ▼</option>'+
+      return o+on(false,false)+'>'+esc(k)+' ▴</option>'+
+             o+' data-desc="1"'+on(true,false)+'>'+esc(k)+' ▾</option>'+
         (isNameField(k) ?                            // surname ordering, for a list of people
-             o+' data-last="1"'+on(false,true)+'>'+esc(k)+' (last word) ▲</option>'+
-             o+' data-last="1" data-desc="1"'+on(true,true)+'>'+esc(k)+' (last word) ▼</option>' : "");
+             o+' data-last="1"'+on(false,true)+'>'+esc(k)+' (last word) ▴</option>'+
+             o+' data-last="1" data-desc="1"'+on(true,true)+'>'+esc(k)+' (last word) ▾</option>' : "");
     }).join("");
 }
 function renderSortSelects(levels){
   levels=levels||activeSorts();
   const extra=sortHasTies(levels)?1:0;             // ties left -> offer to break them
   const n=Math.min(MAX_SORTS,Math.max(1,state.sorts.length+extra));
-  const sig=n+"|"+state.sorts.map(s=>s.k+(s.desc?"▼":"▲")+(s.last?"L":"")).join(",")+
+  const sig=n+"|"+state.sorts.map(s=>s.k+(s.desc?"▾":"▴")+(s.last?"L":"")).join(",")+
             "|"+state.scalarFields.filter(k=>!state.hidden.has(k)).join(",");
   if(state.sortSig===sig) return;                  // nothing structural changed; leave the DOM alone
   state.sortSig=sig;
@@ -1095,12 +1123,46 @@ function fieldOK(r,k,f){                      // does r satisfy field k's filter
   if(f.vals.size&&!miss&&f.vals.has(valKey(v))) return true;
   return false;
 }
+/* ---------- global search ----------
+   Three modes, chosen from the ▼ menu beside the box.
+   "plain" (the default): the whole query, quotes, spaces and all, matches as one
+   literal substring of some field.
+   "terms": the query is a list of OR-ed terms — bare words split on spaces, plus
+   "double quoted" runs that match as one exact phrase, spaces included — the way
+   to ask for words together in one field rather than anywhere in the record. A
+   record is shown when ANY term occurs in ANY of its fields. An unclosed quote
+   takes the rest of the query as its phrase; an empty "" contributes nothing.
+   "whole": the same terms, but a term must BE a field rather than occur in one —
+   `york` finds a record whose city is exactly York, not one merely mentioning it. */
+function parseSearch(q){
+  const terms=[], re=/"([^"]*)"?|(\S+)/g;
+  for(let m; (m=re.exec(q)); ){ const t=(m[1]!==undefined?m[1]:m[2]).trim(); if(t) terms.push(t); }
+  return terms;
+}
+const fieldText = v => ((typeof v==="object")?JSON.stringify(v):String(v)).toLowerCase();
+/* Whole-field mode compares against complete values, so an array is its elements
+   rather than its JSON text: one tag out of a list of tags is a whole value, the
+   bracketed list it prints as is not. */
+const fieldValues = v => Array.isArray(v) ? v.filter(e=>e!=null).map(fieldText) : [fieldText(v)];
+/* Parsed once per query rather than in searchOK, which runs per record. */
+let searchCache={q:"",terms:[]};
+function searchTerms(){
+  if(searchCache.q!==state.search) searchCache={q:state.search, terms:parseSearch(state.search)};
+  return searchCache.terms;
+}
 function searchOK(r){
   if(!state.search) return true;
-  const q=state.search;
+  const mode=state.searchMode;
+  if(mode==="plain"){
+    for(const k in r){ const v=r[k]; if(v==null) continue;
+      if(fieldText(v).includes(state.search)) return true; }
+    return false;
+  }
+  const terms=searchTerms();
+  if(!terms.length) return true;             // just quotes or spaces: nothing to require
   for(const k in r){ const v=r[k]; if(v==null) continue;
-    const s=(typeof v==="object")?JSON.stringify(v):String(v);
-    if(s.toLowerCase().includes(q)) return true; }
+    if(mode==="whole"){ for(const s of fieldValues(v)) for(const t of terms) if(s===t) return true; }
+    else { const s=fieldText(v); for(const t of terms) if(s.includes(t)) return true; } }
   return false;
 }
 /* ---------- saved filter sets (clauses) ----------
@@ -1283,7 +1345,7 @@ function cmpRecords(x,y,k,desc,last){
    dozen. The cost is proportional to the number of SELECTED values, not to the
    number of records — microseconds against the sort it saves. */
 function rowsSig(){
-  const p=[state.dataRev, state.search];
+  const p=[state.dataRev, state.searchMode, state.search];
   /* Switched-off fields count twice over: one that is off has its filter suspended,
      AND has no facets computed for it at all — so a field coming back needs them
      built even when nothing about which records match has changed. */
@@ -1295,7 +1357,7 @@ function rowsSig(){
     for(const [k,f] of c.terms) p.push(k, f.missing?"m":"", f.present?"p":"", [...f.vals].join(""));
   return p.join("");
 }
-const sortSig = levels => levels.map(s=>s.k+(s.desc?"▼":"▲")+(usesLastWord(s)?"L":"")).join("");
+const sortSig = levels => levels.map(s=>s.k+(s.desc?"▾":"▴")+(usesLastWord(s)?"L":"")).join("");
 function apply(){
   const sig=rowsSig(), levels=activeSorts(), ssig=sortSig(levels);
   const sameRows = sig===state.sigRows, sameSort = sameRows && ssig===state.sigSort;
@@ -1365,6 +1427,7 @@ function syncURL(){
   if(state.fileName) put("file", state.fileName);
   if(state.recordKey && arrayCandidates(state.raw).length>1) put("rec", state.recordKey);
   if(state.search) put("q", state.search);
+  if(state.searchMode!=="plain") put("qm",state.searchMode);   // the default writes nothing
   /* One parameter per sort level, its name carrying the direction: sa/sd ascending
      or descending, sla/sld for the last-word variants. Levels are read back in the
      order they appear, so no numbering is needed — and they must stay one per
@@ -1426,6 +1489,10 @@ function restoreFromParams(params){
   if(im!==null){ state.imageSel = im==="__none__"?"":im; $("#imageField").value=state.imageSel; }
   const q=params.one("q");                       // lowercased like the box does, so a
   if(q){ state.search=q.toLowerCase(); $("#globalSearch").value=q; }   // hand-typed ?q=Foo matches
+  const qm=params.one("qm");                     // links written before exact text became
+  if(qm==="terms"||qm==="whole"||qm==="plain"){  // the default still spell it out as qm=plain
+    state.searchMode=qm; $('#searchMenu input[value="'+qm+'"]').checked=true; }
+  syncSearchTip();
   state.sorts=[];                                          // renderSortSelects() below draws them
   for(const [key,raw] of params.list){                     // levels in the order they appear
     const m=/^s(l?)([ad])$/.exec(key);
@@ -2113,6 +2180,21 @@ $("#globalSearch").addEventListener("input",e=>{
   searchTimer=setTimeout(()=>{ state.search=v; state.page=0; apply(); },
                          state.records.length>2000 ? 150 : 0);
 });
+/* the ▼ menu beside the search box: which of the three matching modes is in force.
+   The box's tooltip states the rules of whichever mode is on. */
+const SEARCH_TIPS={
+  plain:'The whole query matches as one exact string — spaces and quotes included — anywhere in a field. The ▼ menu switches to word-by-word matching.',
+  terms:'Words are OR-ed: a record is shown if any of them occurs in any field. Use "double quotes" for an exact phrase, spaces included — the way to require words to appear together. Words and "phrases" mix freely; each is one more OR alternative. The ▼ menu switches the other two modes on.',
+  whole:'Words are OR-ed as above, but a word has to BE a whole field rather than occur in one: york matches a field that is exactly York, not one that mentions it. "Double quotes" hold a multi-word value together; in an array field each element counts as one whole value.'
+};
+function syncSearchTip(){ $("#globalSearch").title=SEARCH_TIPS[state.searchMode]; }
+syncSearchTip();
+$("#searchMenu").addEventListener("change",e=>{
+  state.searchMode=e.target.value; $("#searchMenu").open=false;
+  syncSearchTip(); state.page=0; apply();
+});
+/* a details element never closes itself: any click outside folds it */
+document.addEventListener("click",e=>{ const m=$("#searchMenu"); if(m.open && !e.target.closest("#searchMenu")) m.open=false; });
 $("#pageSize").addEventListener("change",e=>{ state.pageSize=e.target.value==="all"?"all":+e.target.value; state.page=0; apply(); });
 $("#recordArray").addEventListener("change",async e=>{
   const key=e.target.value;

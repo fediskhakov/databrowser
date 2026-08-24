@@ -40,6 +40,7 @@ specificity, event delegation, layout at a given viewport.
 | `test-text` | unit | long-text detection by 90th-percentile-by-record |
 | `test-url` | unit | the URL writer and reader round-tripping, packing, old spellings |
 | `test-numsort` | unit | numeric-column detection and facet value ordering |
+| `test-search` | unit | the global-search query syntax and its three modes: exact text (the default), words OR-ed with `"quoted"` exact phrases, and whole-field matching; unclosed quotes and the term cache |
 | `test-interaction` | page | the bulk of the UI: filters, facets, OR sets, sorting, paging, mobile layout |
 | `test-messy` | page | hostile JSON — `messy-test.json`: a primitive among the records, a `__proto__` field name, an empty field name, mixed arrays. Filtering on `__proto__`, opening its facet panel and saving it as an OR set are the assertions that matter: prototype-named fields are where presence tests and field-keyed tables go wrong |
 | `test-boot` | page | a `?file=` that 404s says why instead of showing a blank start page; **all** / **none** act on every value the panel offers rather than the 1000 rows it drew (`many-test.json`) |

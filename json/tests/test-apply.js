@@ -36,7 +36,7 @@ const ok=(c,m)=>{ if(c) pass++; else { fail++; console.log("  FAIL "+m); } };
   const firstCard = () => ev(`document.querySelector('#cards .card h3').textContent.trim()`);
 
   await ev(`(()=>{const s=document.querySelector('#sortField');
-             s.selectedIndex=[...s.options].findIndex(o=>o.textContent==='university ▲');
+             s.selectedIndex=[...s.options].findIndex(o=>o.textContent==='university ▴');
              s.dispatchEvent(new Event('change',{bubbles:true}));})()`);
   await sleep(500);
 
@@ -69,11 +69,11 @@ const ok=(c,m)=>{ if(c) pass++; else { fail++; console.log("  FAIL "+m); } };
                                b.checked=true; b.dispatchEvent(new Event('change',{bubbles:true}));})()`, "filters"],
     ["changing the sort",   null, 0,
                             `(()=>{const s=document.querySelector('#sortField');
-                               s.selectedIndex=[...s.options].findIndex(o=>o.textContent==='country ▲');
+                               s.selectedIndex=[...s.options].findIndex(o=>o.textContent==='country ▴');
                                s.dispatchEvent(new Event('change',{bubbles:true}));})()`, "sorts"],
     ["reversing it",        null, 0,
                             `(()=>{const s=document.querySelector('#sortField');
-                               s.selectedIndex=[...s.options].findIndex(o=>o.textContent==='country ▼');
+                               s.selectedIndex=[...s.options].findIndex(o=>o.textContent==='country ▾');
                                s.dispatchEvent(new Event('change',{bubbles:true}));})()`, "sorts"],
     ["back to file order",  null, 0,
                             `(()=>{const s=document.querySelector('#sortField');

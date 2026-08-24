@@ -18,7 +18,7 @@ const sandbox = {
     fields: ["repec_id","world_rank","university","country_code","category","refs"],
     scalarFields: ["repec_id","world_rank","university","country_code","category"],
     filters: {}, clauses: [], hidden: new Set(), shortOff: new Set(),
-    search: "", pageSize: 100, page: 0, sorts: [],
+    search: "", searchMode: "plain", pageSize: 100, page: 0, sorts: [],
     viewMode: "cards", titleSel: null, subSel: null, imageSel: null, autoLink: true, restoring: false
   },
   history: { replaceState: (a, b, url) => { captured = url; } },
@@ -28,7 +28,7 @@ const st = sandbox.state;
 function reset(){
   for(const k of st.scalarFields) st.filters[k] = {vals: new Set(), missing: false, present: false};
   st.clauses = []; st.hidden.clear(); st.shortOff.clear(); st.sorts = []; st.search = ""; st.page = 0;
-  st.titleSel = null; st.subSel = null; st.imageSel = null;
+  st.searchMode = "plain"; st.titleSel = null; st.subSel = null; st.imageSel = null;
 }
 reset();
 
@@ -120,6 +120,15 @@ ok(JSON.stringify(round.many("h")) === JSON.stringify(["odd field&name=x"]),
 ok(JSON.stringify(round.many("f.category")) === JSON.stringify(["a=b&c","100%"]),
    "and so do values with & = and %");
 ok(round.one("q") === "a,b", "a comma in the search text is not split");
+
+console.log("\n== search mode ==");
+reset();
+ok(!q().includes("qm="), "the default exact-text mode writes nothing");
+st.searchMode = "terms";
+ok(q().includes("qm=terms"), "the word mode is written\n         got " + q());
+ok(params().one("qm") === "terms", "and read back");
+st.searchMode = "whole";
+ok(params().one("qm") === "whole", "so is the whole-field mode");
 
 console.log("\n== the old spelling still parses ==");
 const oldLink = parse("?file=d.json&f.country_code=us&f.country_code=uk&m.world_rank=1&h.category=1&sort=x&desc=1");
