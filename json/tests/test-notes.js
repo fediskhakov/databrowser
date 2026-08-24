@@ -1,7 +1,8 @@
-/* Notes on records: the button's two jobs, the boxes, what reaches the copies, the
-   file that gets written, and the guard on the ways a note can be lost. The download
-   is captured with Page.setDownloadBehavior so the file itself can be read back —
-   the button's own success flag would prove nothing about its contents. */
+/* Notes on records: the green button's two jobs, the N button beside it, the boxes,
+   what reaches the copies, the JSON that gets written, a file that arrives with notes
+   of its own, and the guard on the ways a note can be lost. The download is captured
+   with Page.setDownloadBehavior so the file itself can be read back — the button's
+   own success flag would prove nothing about its contents. */
 const { spawn } = require("child_process");
 const fs = require("fs"), os = require("os"), path = require("path");
 const { chromeBin, profileDir } = require("./lib.js");
@@ -70,8 +71,13 @@ const ok=(c,m)=>{ if(c) pass++; else { fail++; console.log("  FAIL "+m); } };
   ok(await ev(`document.querySelector('#noteBtn').getAttribute('aria-pressed')`)==="false", "and not pressed");
 
   console.log("\n== toggling the boxes on and off ==");
+  ok(await ev(`document.querySelector('#noteCopy').hidden`),
+     "the copy button is down while the boxes are");
   await ev(`document.querySelector('#noteBtn').click()`); await sleep(300);
   ok(await ev(`document.querySelectorAll('#cards .note').length`)===3, "every card gets one");
+  ok(await ev(`!document.querySelector('#noteCopy').hidden`), "and comes up with them");
+  ok(await ev(`document.querySelector('#noteCopy').disabled`),
+     "dulled, there being nothing written to copy yet");
   ok(await ev(`document.querySelector('#noteBtn').getAttribute('aria-pressed')`)==="true", "the button reads as pressed");
   ok(await ev(`!document.querySelector('#cards .note').labels.length`),
      "the box has no caption of its own");
@@ -101,6 +107,7 @@ const ok=(c,m)=>{ if(c) pass++; else { fail++; console.log("  FAIL "+m); } };
   ok(oneLine<34, `one line high to start with (${Math.round(oneLine)}px)`);
   await ev(`document.querySelector('#noteBtn').click()`); await sleep(300);
   ok(await ev(`document.querySelectorAll('#cards .note').length`)===0, "clicking again hides them");
+  ok(await ev(`document.querySelector('#noteCopy').hidden`), "and takes the copy button down with them");
   await ev(`document.querySelector('#noteBtn').click()`); await sleep(300);
 
   console.log("\n== writing one ==");
@@ -121,6 +128,8 @@ const ok=(c,m)=>{ if(c) pass++; else { fail++; console.log("  FAIL "+m); } };
   await type(0,"first thought\nsecond line\nthird line"); await sleep(250);
   const grown = await ev(`document.querySelectorAll('#cards .note')[0].getBoundingClientRect().height`);
   ok(grown>oneLine+20, `it grows with the lines (${Math.round(oneLine)} → ${Math.round(grown)}px)`);
+  ok(await ev(`!document.querySelector('#noteCopy').disabled`),
+     "and the copy button wakes up, there being something to copy now");
   await type(1,"a note on Grace"); await sleep(250);
   ok(await ev(`state.notes.size`)===2, "a second note on another card");
 
@@ -153,20 +162,36 @@ const ok=(c,m)=>{ if(c) pass++; else { fail++; console.log("  FAIL "+m); } };
   ok(!/[?&]h2=/.test(await ev(`location.search`)) || !(await ev(`decodeURIComponent(location.search)`)).includes("notes"),
      "and none of this reaches the URL");
 
-  console.log("\n== saving them ==");
-  await ev(`document.querySelector('#noteBtn').click()`,true);
-  let file=null;
-  for(let i=0;i<40&&!file;i++){ await sleep(200);
-    const f=fs.readdirSync(dlDir).filter(n=>!n.endsWith(".crdownload"));
-    if(f.length) file=f[0]; }
-  ok(file==="copy-test-notes.txt", `the file is named after the data: ${file}`);
-  const body=fs.readFileSync(path.join(dlDir,file),"utf8");
-  ok(body.split("\n\n").length===2, "one block per noted record, and only those");
-  ok(body.startsWith("Ada Lovelace"), "in the order the page is sorted");
-  ok(body.includes("\n  orcid: 0000-0002-1825-0097"), "in the short-copy format");
-  ok(body.includes("\n  notes: first thought\n"+" ".repeat(9)+"second line"),
+  console.log("\n== N copies them as text, and changes nothing ==");
+  const nt = await ev(`notesText()`);
+  ok(nt.split("\n\n").length===2, "one block per noted record, and only those");
+  ok(nt.startsWith("Ada Lovelace"), "in the order the page is sorted");
+  ok(nt.includes("\n  orcid: 0000-0002-1825-0097"), "in the short-copy format");
+  ok(nt.includes("\n  notes: first thought\n"+" ".repeat(9)+"second line"),
      "with the note as its own field, laid out as the copies lay it out");
-  ok(body.includes("a note on Grace"), "and every note present");
+  ok(nt.includes("a note on Grace"), "and every note present");
+  await ev(`document.querySelector('#noteCopy').click()`,true); await sleep(300);
+  ok(await ev(`state.notesDirty`)===true,
+     "copying leaves them unsaved — it reads them out, it does not keep them");
+  ok(await icon()==="save", "so the green button still offers the file");
+
+  console.log("\n== the green button writes the whole file back ==");
+  const grab = async name => { const f=path.join(dlDir,name);
+    for(let i=0;i<40;i++){ await sleep(200); if(fs.existsSync(f)) return fs.readFileSync(f,"utf8"); }
+    return null; };
+  await ev(`document.querySelector('#noteBtn').click()`,true);
+  const jtext = await grab("copy-test-notes.json");
+  ok(jtext!==null, "named after the data, and JSON: copy-test-notes.json");
+  const jd = jtext ? JSON.parse(jtext) : {people:[]};
+  ok(jd.generated==="2026-08-04" && typeof jd.description==="string",
+     "the file comes back whole, wrapper keys and all");
+  ok(jd.people.length===3, "with every record of the array");
+  ok(jd.people[0].notes==="first thought\nsecond line\nthird line",
+     "the note written into its record, line breaks and all");
+  ok(jd.people[1].notes==="a note on Grace", "each one into its own");
+  ok(!("notes" in jd.people[2]), "and no field at all where nothing was written");
+  ok(jd.people[0].name==="Ada Lovelace" && Array.isArray(jd.people[0].works),
+     "the record otherwise untouched");
   ok(await icon()==="note", "the button goes back to being a toggle");
   ok(await ev(`state.notes.size`)===2, "while the notes themselves stay on the cards");
 
@@ -228,6 +253,67 @@ const ok=(c,m)=>{ if(c) pass++; else { fail++; console.log("  FAIL "+m); } };
   ok(await ev(`state.notes.size`)===0, "discarding lets it through and drops them");
   ok(await ev(`state.notesDirty`)===false, "with nothing left unsaved");
   ok(await icon()==="note", "and the button back to a toggle");
+  console.log("\n== a file that arrives with notes of its own ==");
+  await send("Page.navigate",{url:`http://127.0.0.1:${PORT}/json-browser.html?file=notes-test.json`});
+  for(let i=0;i<60;i++){ await sleep(200);
+    if((await ev(`(()=>{try{return document.querySelectorAll('#cards .card').length}catch(e){return 0}})()`))===4) break; }
+  ok(await ev(`state.notesAdopted`)===true, "its notes column is adopted rather than duplicated");
+  ok(await ev(`state.notesOn`)===true, "and the page opens straight into writing them");
+  ok(await ev(`document.querySelectorAll('#cards .note').length`)===4,
+     "boxes on every card without a click");
+  ok(await ev(`state.notes.size`)===2, "filled from the file, the empty one counting for nothing");
+  ok(await ev(`document.querySelectorAll('#cards .note')[0].value`)==="kept from the file",
+     "each box holding its record's own note");
+  ok(await ev(`document.querySelectorAll('#cards .note')[3].value`)==="two lines\nof it",
+     "line breaks included");
+  ok(await ev(`state.notesDirty`)===false && await icon()==="note",
+     "nothing unsaved yet: reading a file is not editing it");
+  ok(await ev(`!document.querySelector('#noteCopy').hidden`) &&
+     await ev(`!document.querySelector('#noteCopy').disabled`),
+     "both actions on offer from the start");
+  ok(await ev(`NOTE_LABEL()`)==="notes", "one notes field, so one name for it");
+  ok(!(await ev(`document.querySelectorAll('#cards .card')[0].innerText`)).includes("kept from the file"),
+     "the column is not drawn as a row as well — the box is that field");
+  ok(await ev(`state.scalarFields.includes("notes")`),
+     "though it stays a field of the data, filterable like any other");
+  await ev(`document.querySelector('#metaBox').open=true`); await sleep(200);
+  ok(await ev(`document.querySelectorAll('#metaBody [data-shorttog="notes"]').length`)===1,
+     "and the short-copy row offers it once, not twice");
+
+  console.log("\n== editing what it brought, and writing it back ==");
+  await type(0,"edited on the page"); await type(1,"added where there was none");
+  await type(3,""); await sleep(300);
+  ok(await ev(`state.notesDirty`)===true, "an edit marks the file unsaved");
+  ok(await ev(`notesPending()`)===true, "clearing one counts as a change too, on an adopted column");
+  await ev(`document.querySelector('#noteBtn').click()`,true);
+  const ntext = await grab("notes-test-notes.json");
+  ok(ntext!==null, "the JSON is written under the file's own name");
+  const nd = ntext ? JSON.parse(ntext) : {records:[],other:[]};
+  ok(typeof nd.description==="string" && nd.generated==="2026-08-19",
+     "the wrapper keys come back untouched");
+  ok(nd.records[0].notes==="edited on the page", "an edited note replaces the one in the file");
+  ok(nd.records[1].notes==="added where there was none", "a new one is written where there was no field");
+  ok(!("notes" in nd.records[2]), "the record whose note was empty in the file loses the field");
+  ok(!("notes" in nd.records[3]), "and so does one whose note was cleared on the page");
+  ok(nd.other[0].notes.by==="someone", "the sibling array is not touched at all");
+
+  console.log("\n== a notes field that is not a note ==");
+  await ev(`(()=>{const s=document.querySelector('#recordArray');
+     s.value='other'; s.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+  await sleep(400);
+  ok(await ev(`state.notesAdopted`)===false,
+     "a column of objects is data of its own, and is left as data");
+  ok(await ev(`NOTE_LABEL()`)==="notes (added)", "so a note written here takes a name of its own");
+  ok((await ev(`document.querySelector('#cards .card').innerText`)).includes("notes"),
+     "and the field keeps its place on the card");
+  await type(0,"beside it"); await sleep(300);
+  const j2 = JSON.parse(await ev(`notesJSONText()`));
+  ok(j2.other[0]["notes (added)"]==="beside it", "the note goes in beside the data's field");
+  ok(j2.other[0].notes.by==="someone", "which comes through exactly as it was");
+  ok(j2.records[0].notes==="kept from the file",
+     "and the array that is no longer on screen keeps the file's own notes");
+  await ev(`state.notes.clear(); state.notesDirty=false; renderNoteBtn()`);
+
   ok(errors.length===0, "no exceptions: "+JSON.stringify(errors.slice(0,2)));
 
   console.log(`\n${pass} passed, ${fail} failed\n`);

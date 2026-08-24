@@ -40,10 +40,11 @@ specificity, event delegation, layout at a given viewport.
 | `test-text` | unit | long-text detection by 90th-percentile-by-record |
 | `test-url` | unit | the URL writer and reader round-tripping, packing, old spellings |
 | `test-numsort` | unit | numeric-column detection and facet value ordering |
+| `test-search` | unit | the global-search query syntax and its three modes: exact text (the default), words OR-ed with `"quoted"` exact phrases, and whole-field matching; unclosed quotes and the term cache |
 | `test-interaction` | page | the bulk of the UI: filters, facets, OR sets, sorting, paging, mobile layout |
 | `test-messy` | page | hostile JSON — `messy-test.json`: a primitive among the records, a `__proto__` field name, an empty field name, mixed arrays. Filtering on `__proto__`, opening its facet panel and saving it as an OR set are the assertions that matter: prototype-named fields are where presence tests and field-keyed tables go wrong |
 | `test-boot` | page | a `?file=` that 404s says why instead of showing a blank start page; **all** / **none** act on every value the panel offers rather than the 1000 rows it drew (`many-test.json`) |
-| `test-notes` | page | the notes button's two jobs and its two colours, the boxes running full width above the select box and growing with their content, Tab walking only the notes while they are up, notes reaching both copies and the short-copy field row, the downloaded file (captured with `Page.setDownloadBehavior` and read back from disk), and the guard on changing the record array |
+| `test-notes` | page | the green button's two jobs and its two colours, the **N** copy beside it coming and going with the boxes, the boxes running full width above the select box and growing with their content, Tab walking only the notes while they are up, notes reaching both copies and the short-copy field row, the JSON the green button writes (captured with `Page.setDownloadBehavior` and read back from disk: wrapper keys and sibling arrays whole, a field only where a note was written), a file that arrives with notes of its own — adopted into the boxes, opened straight into writing, written back into the same field — and a `notes` field of objects, which is not, and the guard on changing the record array |
 | `test-apply` | page | the work `apply()` is allowed to skip: a page turn re-sorts, re-filters and re-facets nothing, and every real change — filters, search, field switches, sort levels, saved sets, record source — is still picked up. Asserted against `state.stats`, not a stopwatch |
 | `test-ortip` | page | the OR button's help tooltip stays reachable while the button is disabled |
 | `test-numfacet` | page | numeric facet ordering as it reaches the screen, including under a live filter |
@@ -52,8 +53,8 @@ specificity, event delegation, layout at a given viewport.
 
 Fixtures live one level up beside the viewer, so the same server serves both:
 `link-test.json`, `image-test.json`, `sort-test.json`, `text-test.json`,
-`messy-test.json`, `copy-test.json`, `many-test.json`, and the real
-`econ_departments.json`.
+`messy-test.json`, `copy-test.json`, `many-test.json`, `notes-test.json`, and the
+real `econ_departments.json`.
 
 ## Two traps worth knowing
 

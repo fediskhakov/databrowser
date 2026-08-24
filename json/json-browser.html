@@ -49,7 +49,7 @@
   #noteBtn .ico-save{display:none}
   #noteBtn.on{background:var(--ok);border-color:var(--ok);color:#fff}
   #noteBtn.on:hover{background:#166534;border-color:#166534}
-  /* unsaved notes: it stops being a toggle and becomes the way to save them */
+  /* unsaved notes: it stops being a toggle and becomes the way to write the file */
   #noteBtn.dirty .ico-note{display:none}
   #noteBtn.dirty .ico-save{display:block}
   @media (max-width:820px){
@@ -65,8 +65,26 @@
   @media (max-width:520px){ #sideToggle .lbl{display:none} }
   input,select,button{font:inherit;color:inherit}
   .ctl{display:flex;gap:6px;align-items:center}
-  .ctl.grow{flex:1 1 auto;min-width:200px}
-  .ctl.grow input[type=search]{width:100%}
+  .ctl.grow{flex:1 1 auto;min-width:200px;position:relative}
+  /* room on the right for the ▼ that lives inside the box; WebKit's native clear ✕
+     respects the padding, so the two do not collide */
+  .ctl.grow input[type=search]{width:100%;padding-right:30px}
+  /* the ▼ search-options menu: a details, so open/close needs no state of its own.
+     It overlays the input's right edge, reading as the input's own dropdown arrow;
+     the panel hangs just below it */
+  .smenu{position:absolute;right:5px;top:50%;transform:translateY(-50%)}
+  /* no chip, no border: the glyph alone, drawn big and dark enough to be seen
+     against the box it sits in */
+  .smenu>summary{list-style:none;cursor:pointer;padding:0 4px;user-select:none;
+                 color:var(--ink);font-size:12px;line-height:1}
+  .smenu>summary::-webkit-details-marker{display:none}
+  .smenu>summary:hover,.smenu[open]>summary{color:var(--accent)}
+  .smenu-body{position:absolute;right:0;top:calc(100% + 7px);z-index:20;background:#fff;
+              border:1px solid var(--line);border-radius:9px;padding:9px 11px;
+              box-shadow:0 4px 14px rgba(0,0,0,.12);display:flex;flex-direction:column;gap:7px;
+              font-size:12px;white-space:nowrap}
+  .smenu-body label{display:flex;gap:7px;align-items:center;cursor:pointer}
+  .smenu-body input{margin:0;accent-color:var(--accent)}
   input[type=search],input[type=url],input.fsearch{border:1px solid var(--line);border-radius:7px;padding:6px 9px;background:#fff;min-width:160px}
   select,button{border:1px solid var(--line);border-radius:7px;padding:6px 9px;background:#fff;cursor:pointer}
   button:hover,select:hover{border-color:#c7ccd3}
@@ -99,6 +117,18 @@
   .copybtn.ok svg .sheet{fill:var(--accent-lite)}
   .copybtn.bad{background:var(--no);border-color:var(--no)}
   .copybtn.bad svg .sheet{fill:var(--no)}
+  /* Its neighbour, the other half of the pair: the same sheet as the S and F copies,
+     in the notes' green, up whenever the boxes are and dulled while there is nothing
+     to copy. Copying changes nothing, so it never carries the unsaved state. */
+  .notecopy{background:#fff;border-color:var(--ok);color:var(--ok)}
+  .notecopy svg .sheet{fill:var(--ok)}
+  /* the letter rides ON the sheet, so it takes the sheet's contrast, not the button's */
+  .notecopy svg text{fill:#fff}
+  .notecopy:hover:not([disabled]){background:var(--ok-pale);border-color:#166534;color:#166534}
+  .notecopy[disabled]{opacity:.5;cursor:default;border-color:var(--line);color:var(--muted)}
+  .notecopy[disabled] svg .sheet{fill:var(--muted)}
+  /* .copybtn is inline-flex, which would outrank the attribute's own display:none */
+  .notecopy[hidden]{display:none}
   details.meta{margin-bottom:10px;background:var(--panel);border:1px solid var(--line);border-radius:10px}
   details.meta>summary{cursor:pointer;padding:9px 12px;font-weight:600}
   details.meta>summary .mhint{font-weight:500;font-size:12px;color:var(--muted)}
@@ -294,7 +324,17 @@
             title="Show or hide sort, filters and display options">☰<span class="lbl"> Filters</span></button>
     <h1>JSON DB Viewer</h1>
     <span id="fileName" class="muted"></span>
-    <span class="ctl grow"><input type="search" id="globalSearch" placeholder="Search all fields…"></span>
+    <span class="ctl grow">
+      <input type="search" id="globalSearch" placeholder="Search all fields…">
+      <details class="smenu" id="searchMenu">
+        <summary title="How the search box matches">▼</summary>
+        <div class="smenu-body">
+          <label><input type="radio" name="searchMode" value="plain" checked> exact text — the whole query as one string</label>
+          <label><input type="radio" name="searchMode" value="terms"> any word — OR-ed, "quotes" for exact phrases</label>
+          <label><input type="radio" name="searchMode" value="whole"> whole field — any word, matching a field entirely</label>
+        </div>
+      </details>
+    </span>
     <span class="count"><span id="resCount">0</span> records</span>
     <span class="pager">
       <button id="first">«</button><button id="prev">‹</button>
@@ -329,10 +369,20 @@
         </svg>
       </button>
     </span>
-    <!-- last, so it keeps the right-hand end whether or not the selection bar is up.
-         One button, two jobs: while there is nothing to save it shows the note boxes
-         and hides them again; the moment a note is edited it becomes the way to save
-         them, and goes back to being a toggle once they are downloaded. -->
+    <!-- The notes' pair, the green one last so it keeps the right-hand end whether or
+         not the selection bar is up. N copies the noted records as text and leaves
+         everything as it was. The green one has two jobs: while there is nothing to
+         save it shows the note boxes and hides them again; the moment a note is
+         edited it becomes the way to download the whole file with the notes written
+         into it, and goes back to being a toggle once that is done. -->
+    <button class="copybtn notecopy" id="noteCopy" hidden
+            title="Copy the noted records as text">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="8.5" y="2.5" width="12.5" height="15.5" rx="2.5"/>
+        <rect class="sheet" x="3" y="6" width="12.5" height="15.5" rx="2.5"/>
+        <text x="9.25" y="16.8" text-anchor="middle">N</text>
+      </svg>
+    </button>
     <button id="noteBtn" aria-pressed="false" title="Add a note to each record">
       <svg class="ico-note" viewBox="0 0 24 24" aria-hidden="true">
         <path d="M14.5 3H6.5A1.5 1.5 0 0 0 5 4.5v15A1.5 1.5 0 0 0 6.5 21h6"/>
@@ -437,7 +487,7 @@ Each saved set shows how many records it matches, and after × how many would di
   <div class="gbox" role="dialog" aria-modal="true" aria-labelledby="guardMsg">
     <div class="gmsg" id="guardMsg"></div>
     <div class="gacts">
-      <button class="primary" id="guardSave">Download notes first</button>
+      <button class="primary" id="guardSave">Download the JSON first</button>
       <button id="guardDiscard">Discard the notes</button>
       <button id="guardCancel">Cancel</button>
     </div>
@@ -470,7 +520,7 @@ const state = {
   facetVal:{}, facetMiss:{}, facetPres:{},   // live, recomputed each apply()
   filters:{},            // field -> {vals:Set, missing:bool, present:bool}   (the live set)
   clauses:[],            // saved filter sets, OR-ed with each other and with the live one
-  search:"", pageSize:100, page:0,
+  search:"", searchMode:"plain", pageSize:100, page:0,   // searchMode: "plain" | "terms" | "whole" — the ▼ menu
   sorts:[],              // [{k,desc,last}] — level 1 first, each breaking the one above
   titleSel:null, subSel:null, viewMode:"cards",
   hidden:new Set(),      // fields switched off in the metadata panel (display only)
@@ -486,6 +536,9 @@ const state = {
      the place to carry it. They live only until the page is closed, so notesDirty
      drives both the button's icon and the warning on the way out. */
   notes:new Map(), notesOn:false, notesDirty:false,
+  /* set when the file arrived with a notes column of its own: the boxes then edit
+     THAT field rather than adding a second one beside it */
+  notesAdopted:false,
   base:[],               // what matches, in file order; filtered is this, ordered
   filtered:[], pageItems:[], restoring:false,
   /* apply() skips the work whose inputs have not changed; these say what it did.
@@ -787,8 +840,8 @@ function setRecordSource(key, keepSearch){
   state.selected.clear();                        // the basket held records of the old array
   state.shortOff.clear();
   /* the notes belonged to records that are gone; whoever got us here has already
-     offered to save them */
-  state.notes.clear(); state.notesDirty=false; renderNoteBtn();
+     offered to save them. What the new array carries of its own is read in instead. */
+  state.notes.clear(); state.notesDirty=false; seedNotes(); renderNoteBtn();
   state.page=0; if(!keepSearch){ state.search=""; $("#globalSearch").value=""; }
   populateFieldSelects();
   renderMeta(); renderFilters(); renderClauses(); apply();
@@ -862,9 +915,10 @@ const shortNote = () => state.shortOff.size ? "   — "+state.shortOff.size+" le
    switched off above is in no copy at all, so it is shown greyed out here. */
 function shortRow(){
   /* the notes are offered here too, once any exist: they are copied by default, and
-     this is the one place to say otherwise */
+     this is the one place to say otherwise. An adopted column is already in the list
+     under its own name, and that one chip governs the notes written in its place. */
   const fields=state.scalarFields.concat(state.complexFields)
-    .concat(state.notes.size?[NOTE_LABEL()]:[]);
+    .concat(state.notes.size&&!state.notesAdopted?[NOTE_LABEL()]:[]);
   if(!fields.length) return "";
   const chips=fields.map(k=>{
     const on=!state.shortOff.has(k);
@@ -908,7 +962,7 @@ function syncFieldUI(){
    At most three levels: past that the ordering is doing more than a reader can
    follow, and every extra select costs sidebar room.
    One per level, plus one more while the order is still undecided, so the cascade
-   grows only as far as the data needs. Each field appears twice (▲ ascending, ▼
+   grows only as far as the data needs. Each field appears twice (▴ ascending, ▾
    descending); the direction rides on a data attribute rather than inside the
    value, so a field name keeps its own characters whatever they are. */
 function sortOptions(sel,level){
@@ -921,18 +975,18 @@ function sortOptions(sel,level){
       /* usesLastWord, not sel.last: a stale last=1 on a field that has no last-word
          options degrades to the plain ascending one rather than matching nothing */
       const on=(desc,last)=> sel&&sel.k===k&&!!sel.desc===desc&&usesLastWord(sel)===last ? " selected" : "";
-      return o+on(false,false)+'>'+esc(k)+' ▲</option>'+
-             o+' data-desc="1"'+on(true,false)+'>'+esc(k)+' ▼</option>'+
+      return o+on(false,false)+'>'+esc(k)+' ▴</option>'+
+             o+' data-desc="1"'+on(true,false)+'>'+esc(k)+' ▾</option>'+
         (isNameField(k) ?                            // surname ordering, for a list of people
-             o+' data-last="1"'+on(false,true)+'>'+esc(k)+' (last word) ▲</option>'+
-             o+' data-last="1" data-desc="1"'+on(true,true)+'>'+esc(k)+' (last word) ▼</option>' : "");
+             o+' data-last="1"'+on(false,true)+'>'+esc(k)+' (last word) ▴</option>'+
+             o+' data-last="1" data-desc="1"'+on(true,true)+'>'+esc(k)+' (last word) ▾</option>' : "");
     }).join("");
 }
 function renderSortSelects(levels){
   levels=levels||activeSorts();
   const extra=sortHasTies(levels)?1:0;             // ties left -> offer to break them
   const n=Math.min(MAX_SORTS,Math.max(1,state.sorts.length+extra));
-  const sig=n+"|"+state.sorts.map(s=>s.k+(s.desc?"▼":"▲")+(s.last?"L":"")).join(",")+
+  const sig=n+"|"+state.sorts.map(s=>s.k+(s.desc?"▾":"▴")+(s.last?"L":"")).join(",")+
             "|"+state.scalarFields.filter(k=>!state.hidden.has(k)).join(",");
   if(state.sortSig===sig) return;                  // nothing structural changed; leave the DOM alone
   state.sortSig=sig;
@@ -1095,12 +1149,46 @@ function fieldOK(r,k,f){                      // does r satisfy field k's filter
   if(f.vals.size&&!miss&&f.vals.has(valKey(v))) return true;
   return false;
 }
+/* ---------- global search ----------
+   Three modes, chosen from the ▼ menu beside the box.
+   "plain" (the default): the whole query, quotes, spaces and all, matches as one
+   literal substring of some field.
+   "terms": the query is a list of OR-ed terms — bare words split on spaces, plus
+   "double quoted" runs that match as one exact phrase, spaces included — the way
+   to ask for words together in one field rather than anywhere in the record. A
+   record is shown when ANY term occurs in ANY of its fields. An unclosed quote
+   takes the rest of the query as its phrase; an empty "" contributes nothing.
+   "whole": the same terms, but a term must BE a field rather than occur in one —
+   `york` finds a record whose city is exactly York, not one merely mentioning it. */
+function parseSearch(q){
+  const terms=[], re=/"([^"]*)"?|(\S+)/g;
+  for(let m; (m=re.exec(q)); ){ const t=(m[1]!==undefined?m[1]:m[2]).trim(); if(t) terms.push(t); }
+  return terms;
+}
+const fieldText = v => ((typeof v==="object")?JSON.stringify(v):String(v)).toLowerCase();
+/* Whole-field mode compares against complete values, so an array is its elements
+   rather than its JSON text: one tag out of a list of tags is a whole value, the
+   bracketed list it prints as is not. */
+const fieldValues = v => Array.isArray(v) ? v.filter(e=>e!=null).map(fieldText) : [fieldText(v)];
+/* Parsed once per query rather than in searchOK, which runs per record. */
+let searchCache={q:"",terms:[]};
+function searchTerms(){
+  if(searchCache.q!==state.search) searchCache={q:state.search, terms:parseSearch(state.search)};
+  return searchCache.terms;
+}
 function searchOK(r){
   if(!state.search) return true;
-  const q=state.search;
+  const mode=state.searchMode;
+  if(mode==="plain"){
+    for(const k in r){ const v=r[k]; if(v==null) continue;
+      if(fieldText(v).includes(state.search)) return true; }
+    return false;
+  }
+  const terms=searchTerms();
+  if(!terms.length) return true;             // just quotes or spaces: nothing to require
   for(const k in r){ const v=r[k]; if(v==null) continue;
-    const s=(typeof v==="object")?JSON.stringify(v):String(v);
-    if(s.toLowerCase().includes(q)) return true; }
+    if(mode==="whole"){ for(const s of fieldValues(v)) for(const t of terms) if(s===t) return true; }
+    else { const s=fieldText(v); for(const t of terms) if(s.includes(t)) return true; } }
   return false;
 }
 /* ---------- saved filter sets (clauses) ----------
@@ -1283,7 +1371,7 @@ function cmpRecords(x,y,k,desc,last){
    dozen. The cost is proportional to the number of SELECTED values, not to the
    number of records — microseconds against the sort it saves. */
 function rowsSig(){
-  const p=[state.dataRev, state.search];
+  const p=[state.dataRev, state.searchMode, state.search];
   /* Switched-off fields count twice over: one that is off has its filter suspended,
      AND has no facets computed for it at all — so a field coming back needs them
      built even when nothing about which records match has changed. */
@@ -1295,7 +1383,7 @@ function rowsSig(){
     for(const [k,f] of c.terms) p.push(k, f.missing?"m":"", f.present?"p":"", [...f.vals].join(""));
   return p.join("");
 }
-const sortSig = levels => levels.map(s=>s.k+(s.desc?"▼":"▲")+(usesLastWord(s)?"L":"")).join("");
+const sortSig = levels => levels.map(s=>s.k+(s.desc?"▾":"▴")+(usesLastWord(s)?"L":"")).join("");
 function apply(){
   const sig=rowsSig(), levels=activeSorts(), ssig=sortSig(levels);
   const sameRows = sig===state.sigRows, sameSort = sameRows && ssig===state.sigSort;
@@ -1365,6 +1453,7 @@ function syncURL(){
   if(state.fileName) put("file", state.fileName);
   if(state.recordKey && arrayCandidates(state.raw).length>1) put("rec", state.recordKey);
   if(state.search) put("q", state.search);
+  if(state.searchMode!=="plain") put("qm",state.searchMode);   // the default writes nothing
   /* One parameter per sort level, its name carrying the direction: sa/sd ascending
      or descending, sla/sld for the last-word variants. Levels are read back in the
      order they appear, so no numbering is needed — and they must stay one per
@@ -1426,6 +1515,10 @@ function restoreFromParams(params){
   if(im!==null){ state.imageSel = im==="__none__"?"":im; $("#imageField").value=state.imageSel; }
   const q=params.one("q");                       // lowercased like the box does, so a
   if(q){ state.search=q.toLowerCase(); $("#globalSearch").value=q; }   // hand-typed ?q=Foo matches
+  const qm=params.one("qm");                     // links written before exact text became
+  if(qm==="terms"||qm==="whole"||qm==="plain"){  // the default still spell it out as qm=plain
+    state.searchMode=qm; $('#searchMenu input[value="'+qm+'"]').checked=true; }
+  syncSearchTip();
   state.sorts=[];                                          // renderSortSelects() below draws them
   for(const [key,raw] of params.list){                     // levels in the order they appear
     const m=/^s(l?)([ad])$/.exec(key);
@@ -1546,6 +1639,7 @@ function recordRows(r,ctx){
   const rows=[], nested=[];
   for(const k of state.scalarFields){ if(k===tf||k===sub||state.hidden.has(k)) continue;
     if(k===imgF&&img!==null) continue;                     // shown as the thumbnail instead
+    if(state.notesAdopted&&k===NOTE_FIELD) continue;       // the note box IS this field
     const v=val(r,k); if(isMissing(v)) continue;           // hide empty scalar fields
     rows.push({k,v,long:isLongText(k)}); }
   for(const k of state.complexFields){ if(state.hidden.has(k)) continue; const v=val(r,k);
@@ -1681,22 +1775,47 @@ function textValue(v,pad){
   return textScalar(v);
 }
 /* ---------- notes ----------
-   A line of the reader's own against any record. They are not data: they never
-   reach the URL, they are not filtered or sorted on, and they last only as long as
-   the page is open — which is why leaving with unsaved ones is worth a warning.
-   Both copies carry them, and so does the file the button writes. */
-const NOTE_LABEL = () => state.fields.includes("notes") ? "notes (added)" : "notes";
+   A line of the reader's own against any record. They never reach the URL, they are
+   not filtered or sorted on, and they last only as long as the page is open — which
+   is why leaving with unsaved ones is worth a warning. Two ways out, one per button:
+   N copies the noted records as text, the green one downloads the whole file with
+   the notes written into it. Only the download counts as saving them.
+   A file that ALREADY keeps notes is a file already being annotated, so its column
+   is adopted rather than duplicated: the values fill the boxes, the field stops
+   being drawn as a row of its own, and the page opens with the boxes up. Only a
+   scalar column can be adopted — one holding objects is data of another kind, and
+   keeps its place while the notes go beside it under a name of their own. */
+const NOTE_FIELD = "notes";
+const NOTE_LABEL = () =>
+  (!state.notesAdopted && state.fields.includes(NOTE_FIELD)) ? "notes (added)" : NOTE_FIELD;
 const noteOf = r => state.notes.get(r)||"";
-/* something to save: an edit that emptied the last note leaves nothing to write */
-const notesPending = () => state.notesDirty && state.notes.size>0;
+/* Something to write: normally a note to carry, but on an adopted column an edit
+   that emptied the last one is a change too — the file has to lose the field. */
+const notesPending = () => state.notesDirty && (state.notes.size>0 || state.notesAdopted);
+function seedNotes(){
+  state.notesAdopted=false;
+  if(!state.fields.includes(NOTE_FIELD)) return;
+  for(const r of state.records){ const v=val(r,NOTE_FIELD);
+    if(v!==null && v!==undefined && typeof v==="object") return; }   // not ours to edit
+  state.notesAdopted=true;
+  for(const r of state.records){ const v=val(r,NOTE_FIELD);
+    if(!isMissing(v)) state.notes.set(r,String(v)); }
+  state.notesOn=true;                        // straight into writing: that is the job here
+}
 function renderNoteBtn(){
-  const b=$("#noteBtn"), dirty=notesPending();
+  const b=$("#noteBtn"), c=$("#noteCopy"), n=state.notes.size, dirty=notesPending();
   b.classList.toggle("dirty",dirty);
   b.classList.toggle("on",state.notesOn);   // green means the boxes are up, saved or not
   b.setAttribute("aria-pressed",String(state.notesOn));
   b.title = dirty
-    ? "Download "+state.notes.size+(state.notes.size===1?" note":" notes")+" as a text file"
+    ? "Download the file as JSON, with "+(n?n+(n===1?" note":" notes"):"the notes")+" written in"
     : state.notesOn ? "Hide the note boxes" : "Add a note to each record";
+  /* the copy rides with the boxes, not with the unsaved state: it is a way of
+     reading the notes out, not of keeping them */
+  c.hidden=!state.notesOn;
+  c.disabled=!n;
+  c.title = n ? "Copy "+n+(n===1?" noted record":" noted records")+" as text"
+              : "Nothing written yet";
 }
 function setNotesOn(on){
   state.notesOn=on;
@@ -1712,17 +1831,47 @@ function notedRecords(){
   if(levels.length) out.sort((x,y)=>cmpMulti(x,y,levels));
   return out;
 }
-function downloadNotes(){
-  const text=blocksText(notedRecords(),false,true);
-  const base=(state.fileName||"records").replace(/^.*[\\/]/,"").replace(/\.json$/i,"");
+/* The text the N button copies: exactly what the records themselves would copy,
+   narrowed to the ones carrying a note. */
+const notesText = () => blocksText(notedRecords(),false,true);
+async function copyNotesText(btn){
+  const rs=notedRecords(); if(!rs.length) return;
+  const okd=await copyOut(notesText(),null);
+  flash(btn, okd, rs.length+(rs.length===1?" noted record":" noted records")+" as text");
+}
+/* The file as loaded with the notes written into it. The whole structure is kept —
+   wrapper keys, sibling arrays, and every record, filtered in or not — and only the
+   records of the array on screen are touched: a note becomes a field, a note emptied
+   takes the field away again, but only on an adopted column. Where the file has a
+   notes field of its own that is NOT ours, the note goes in beside it under the same
+   name the copies give it, so nothing of the data is overwritten.
+   The replacer returns copies rather than editing the records: the page keeps
+   showing the file it loaded, and a download changes nothing on screen. */
+function notesJSONText(){
+  const key=NOTE_LABEL(), mine=new Set(state.records), adopted=state.notesAdopted;
+  return JSON.stringify(state.raw, (k,v)=>{
+    if(!v || typeof v!=="object" || !mine.has(v)) return v;
+    const note=noteOf(v).trim();
+    if(note) return {...v, [key]:note};
+    if(adopted && own.call(v,key)){ const c={...v}; delete c[key]; return c; }
+    return v;
+  }, 2);
+}
+function saveBlob(text,type,name){
   const a=document.createElement("a");
-  const url=URL.createObjectURL(new Blob([text],{type:"text/plain;charset=utf-8"}));
-  a.href=url; a.download=base+"-notes.txt";
+  const url=URL.createObjectURL(new Blob([text],{type}));
+  a.href=url; a.download=name;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+function downloadNotesJSON(){
+  const base=(state.fileName||"records").replace(/^.*[\\/]/,"").replace(/\.json$/i,"");
+  const name=base+"-notes.json";
+  saveBlob(notesJSONText(),"application/json;charset=utf-8",name);
   state.notesDirty=false;        // written out; the button goes back to being a toggle
   renderNoteBtn();
-  $("#copyStatus").textContent="Saved "+state.notes.size+" notes to "+a.download;
+  const n=state.notes.size;
+  $("#copyStatus").textContent="Saved "+name+" with "+(n?n+(n===1?" note":" notes"):"the notes cleared");
 }
 
 const NOTHING_OFF=new Set();
@@ -1987,7 +2136,8 @@ $("#cards").addEventListener("input",e=>{
 /* Two jobs, decided by whether there is anything to save. Nothing pending: it shows
    the boxes and hides them again. Something pending: it writes the file, and goes
    back to being a toggle once it has. */
-$("#noteBtn").onclick=()=>{ if(notesPending()) downloadNotes(); else setNotesOn(!state.notesOn); };
+$("#noteBtn").onclick=()=>{ if(notesPending()) downloadNotesJSON(); else setNotesOn(!state.notesOn); };
+$("#noteCopy").onclick=e=>copyNotesText(e.currentTarget);
 /* Highlight the card being written on: which box has the cursor is otherwise easy to
    lose on a wide grid. Delegated focusin/focusout rather than :has(), which the rest
    of the file also does without. */
@@ -2113,6 +2263,21 @@ $("#globalSearch").addEventListener("input",e=>{
   searchTimer=setTimeout(()=>{ state.search=v; state.page=0; apply(); },
                          state.records.length>2000 ? 150 : 0);
 });
+/* the ▼ menu beside the search box: which of the three matching modes is in force.
+   The box's tooltip states the rules of whichever mode is on. */
+const SEARCH_TIPS={
+  plain:'The whole query matches as one exact string — spaces and quotes included — anywhere in a field. The ▼ menu switches to word-by-word matching.',
+  terms:'Words are OR-ed: a record is shown if any of them occurs in any field. Use "double quotes" for an exact phrase, spaces included — the way to require words to appear together. Words and "phrases" mix freely; each is one more OR alternative. The ▼ menu switches the other two modes on.',
+  whole:'Words are OR-ed as above, but a word has to BE a whole field rather than occur in one: york matches a field that is exactly York, not one that mentions it. "Double quotes" hold a multi-word value together; in an array field each element counts as one whole value.'
+};
+function syncSearchTip(){ $("#globalSearch").title=SEARCH_TIPS[state.searchMode]; }
+syncSearchTip();
+$("#searchMenu").addEventListener("change",e=>{
+  state.searchMode=e.target.value; $("#searchMenu").open=false;
+  syncSearchTip(); state.page=0; apply();
+});
+/* a details element never closes itself: any click outside folds it */
+document.addEventListener("click",e=>{ const m=$("#searchMenu"); if(m.open && !e.target.closest("#searchMenu")) m.open=false; });
 $("#pageSize").addEventListener("change",e=>{ state.pageSize=e.target.value==="all"?"all":+e.target.value; state.page=0; apply(); });
 $("#recordArray").addEventListener("change",async e=>{
   const key=e.target.value;
@@ -2161,8 +2326,11 @@ $("#sideToggle").onclick=()=>showSide($(".app").classList.contains("sidehidden")
 let guardAnswer=null;
 function askAboutNotes(what){
   if(!notesPending()) return Promise.resolve("go");
-  $("#guardMsg").textContent=state.notes.size+(state.notes.size===1?" note has":" notes have")+
-    " not been saved, and "+what+" will discard "+(state.notes.size===1?"it":"them")+".";
+  const n=state.notes.size;
+  $("#guardMsg").textContent = n
+    ? n+(n===1?" note has":" notes have")+" not been saved, and "+what+
+      " will discard "+(n===1?"it":"them")+"."
+    : "The notes have been cleared and not saved, and "+what+" will discard the change.";
   $("#guard").hidden=false;
   $("#guardSave").focus();
   return new Promise(r=>{ guardAnswer=r; });
@@ -2176,7 +2344,7 @@ $("#guard").addEventListener("keydown",e=>{ if(e.key==="Escape") answerGuard("ca
 async function notesLetGo(what){
   const a=await askAboutNotes(what);
   if(a==="cancel") return false;
-  if(a==="save") downloadNotes();
+  if(a==="save") downloadNotesJSON();
   return true;                   // setRecordSource clears the notes either way
 }
 window.addEventListener("beforeunload",e=>{

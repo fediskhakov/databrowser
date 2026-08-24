@@ -92,7 +92,7 @@ width.
 ## Sorting
 
 The **Sort** dropdown orders records by any switched-on field. Every field is listed
-twice — `world_rank ▲` ascending, `world_rank ▼` descending. `(file order)` is the
+twice — `world_rank ▴` ascending, `world_rank ▾` descending. `(file order)` is the
 default.
 
 **Ties open another level.** If the chosen field has repeated values, a second
@@ -101,9 +101,9 @@ levels above left tied:
 
 ```
 SORT
-  country ▲
-    category ▲
-      world_rank ▼
+  country ▴
+    category ▴
+      world_rank ▾
 ```
 
 A level is offered only while ties remain — a unique field ends the cascade at once
@@ -151,6 +151,36 @@ Each switched-on scalar field gets a collapsible panel:
 
 Within a field values are **OR**-ed; across fields, **AND**-ed. **Reset filters**
 clears everything, saved sets and search included.
+
+### Search
+
+The **search** box in the header matches every field of every record — nested and
+switched-off ones included — case-insensitively. The **▼** button inside the box
+opens a small menu choosing between three matching modes; the box's own tooltip
+always states the rules of whichever mode is on.
+
+**Exact text** (the default): the whole query — spaces, quotes and all — matches
+as one literal substring, so `york boston` finds only records containing exactly
+that string, and `york` finds every record mentioning it anywhere.
+
+**Any word**: the query is a list of terms, and a record is shown when **any**
+term occurs anywhere in it:
+
+- words separated by spaces are separate terms, so `york boston` finds records
+  containing either word;
+- `"double quotes"` make an exact phrase, spaces included: `"new york"` finds
+  only records where the two words appear together in one field — the way to
+  *require* words jointly rather than accept each on its own;
+- words and phrases mix freely, each one more alternative: `"new york" "boston
+  college" oxford` shows records matching any of the three.
+
+**Whole field**: the same terms, OR-ed the same way, but a term has to *be* a
+field rather than occur in one — `york` keeps a record whose city is exactly
+York and drops one merely named *University of York*. Multi-word values are
+asked for in `"quotes"`, as above; in an array field each element counts as one
+whole value, so `jesuit` matches a record tagged `["private","jesuit"]` while
+the bracketed list itself never matches. It is the search-box equivalent of
+picking a value out of a filter panel, over every field at once.
 
 ### Honest faceting
 
@@ -465,12 +495,33 @@ while they are up**. The icon says what a click will do:
 |---|---|---|
 | outlined green, **✎** pencil and sheet | the boxes are hidden | shows them |
 | filled green, **✎** | the boxes are up, nothing unsaved | hides them again |
-| filled green, **↓** arrow | notes edited since the last save | writes them to a file |
+| filled green, **↓** arrow | notes edited since the last save | [downloads the JSON](#the-two-ways-out) with the notes written in |
 
 The arrow means there is something to save, so an unsaved note is visible from the
 header and the way to deal with it is the same button. Once the file is written the
 arrow goes back to being the toggle, and stays that way until the next edit. The
 darker green is only ever a hover, in every state, so it is never mistaken for one.
+
+**A green N sits beside it** whenever the boxes are up — the same sheet as the **S**
+and **F** copies, in the notes' green — and copies the noted records as text. It is
+dulled until something is written, and copying never counts as saving: the arrow
+stays on the green button until the file itself is written.
+
+### A file that already keeps notes
+
+Load one whose records carry a `notes` field of their own and the page opens **already
+in note-writing**: the boxes are up, filled with what the file holds, and both actions
+are on offer at once. That column is *adopted* rather than duplicated — the box is
+that field, so it is not drawn as a row as well, and the JSON you download writes your
+edits back into it. Clearing a note removes the field from that record.
+
+The column stays a field of the data in every other respect: it keeps its filter
+panel and its place in sorting, both reading the file **as loaded** rather than the
+edits in the boxes, which is what unsaved means.
+
+A `notes` field holding objects or arrays is data of another kind and is left alone —
+it keeps its row on the card, and notes you write go beside it under the name
+`notes (added)`, in the copies and in the JSON alike.
 
 The card you are writing on is **washed in pale green** while the cursor is in its
 box, so it is clear which note you are typing into on a wide grid of cards.
@@ -498,12 +549,13 @@ They wear them in both places that load: on the empty screen and in the
 **load JSON** row of the metadata panel. Orange is loading and nothing else, which is
 why neither button takes the selection's blue any more.
 
-**The file** is the [short copy](#choosing-what-the-short-copy-prints) of every
-record that carries a note — in the order the page is sorted, like every other copy
-— with the note added as a final `notes` field. Plain text, handed to the browser as
-a download named after the data (`econ_departments-notes.txt`). A note's own line
-breaks are kept, indented to hang under the value; every other field is formatted
-exactly as the **S** button formats it.
+### The two ways out
+
+**N copies the notes as text.** It is the [short copy](#choosing-what-the-short-copy-prints)
+of every record that carries a note — in the order the page is sorted, like every
+other copy — with the note added as a final `notes` field. A note's own line breaks
+are kept, indented to hang under the value; every other field is formatted exactly as
+the **S** button formats it.
 
 ```
 Ada Lovelace — Analyst
@@ -512,10 +564,19 @@ Ada Lovelace — Analyst
          translation
 ```
 
-**Both copy buttons carry the notes too**, without being asked. Untick `notes` in
-the short-copy field row to keep them out of **S**; the **F** copy prints everything,
-notes included, with the line breaks preserved. If the data already has a field
-called `notes` the added one is labelled `notes (added)`, so the two never merge.
+**The green arrow downloads the file itself**, as JSON, named after the data
+(`econ_departments-notes.json`). It is the file you loaded and nothing else: every
+wrapper key, every sibling array, and every record whether or not the filters show
+it. The only difference is the notes — written into the records of the array on
+screen, and **only where a note was actually written**. A record with no note has no
+`notes` field added; a note cleared on an [adopted column](#a-file-that-already-keeps-notes)
+takes the field away again. Downloading is what marks the notes saved.
+
+**Both record-copy buttons carry the notes too**, without being asked. Untick `notes`
+in the short-copy field row to keep them out of **S**; the **F** copy prints
+everything, notes included, with the line breaks preserved. Where a `notes` field of
+the data cannot be adopted, the added one is labelled `notes (added)`, so the two
+never merge.
 
 Notes are **not** written to the URL, and they do not survive a reload — they are the
 reader's own marks on a view, not data. Consequently:
@@ -525,7 +586,7 @@ reader's own marks on a view, not data. Consequently:
   buttons in it, so all it can do is give you the chance to stay.
 - The actions this page performs itself **can** offer the choice, and do. Loading
   another file, dropping one on the window, or changing the main record array asks
-  first, and offers to download the notes, discard them, or cancel.
+  first, and offers to download the JSON, discard the notes, or cancel.
 
 ---
 
@@ -538,7 +599,8 @@ Every filter, sort and display change is written back into the address bar via
 |-----------|---------|
 | `file` | Path or URL of the JSON to load |
 | `rec` | Record-array key (only when the file has more than one array) |
-| `q` | Global search string |
+| `q` | Global search query, [quotes and all](#search) |
+| `qm` | The search box's [matching mode](#search): `terms` for any-word, `whole` for whole-field (omitted in the default exact-text mode) |
 | `sa` / `sd` | A sort level, ascending or descending. Repeatable — levels apply in the order they appear |
 | `sla` / `sld` | The same, by [last word](#sorting) |
 | `ps` | Records per page; omitted when `100` |
@@ -602,8 +664,8 @@ hand them to the browser.
 - A copied selection is a snapshot of the display, not of the data: it holds what
   the cards show, not the fields you switched off, and no JSON structure. The short
   copy narrows that further, to the fields ticked for it.
-- [Notes](#notes) live in the page, not in the file or the link. Save them before
-  you close the tab; nothing else will keep them.
+- [Notes](#notes) live in the page, not in the file or the link. Download the JSON
+  before you close the tab; nothing else will keep them.
 
 ## Files
 

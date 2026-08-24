@@ -1,0 +1,13 @@
+{
+  "description": "Fixture for a file that already keeps notes. The records array carries a notes column of its own, filled on some records, empty on one and absent on another, so adoption has all three cases to read. The sibling array and these wrapper keys exist to be left alone: the JSON the notes button writes must give back the whole file, touching only the records on screen. That sibling also holds a notes field of a different kind — an object, which is data rather than a line of prose — so switching to it is the case where the notes cannot be adopted and go in beside it instead.",
+  "generated": "2026-08-19",
+  "records": [
+    { "id": "r1", "city": "York", "notes": "kept from the file" },
+    { "id": "r2", "city": "Boston" },
+    { "id": "r3", "city": "Oxford", "notes": "" },
+    { "id": "r4", "city": "New York", "notes": "two lines\nof it" }
+  ],
+  "other": [
+    { "id": "o1", "notes": { "by": "someone", "text": "structured, not a line of prose" } }
+  ]
+}
