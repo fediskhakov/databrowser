@@ -1104,6 +1104,30 @@ const chrome = spawn(CHROME, ["--headless", "--disable-gpu", `--remote-debugging
   ok((await clauses()).length === 0 && await nRecords() === all,
      "Reset filters clears saved sets, live filters and the search alike");
 
+  console.log("\n== the pager is there only when there is paging to do ==");
+  const pagerUp = () => evaluate(`getComputedStyle(document.querySelector('.pager')).display!=='none'`);
+  ok(await pagerUp(), "379 records at 100 a page: four pages, so the arrows are up");
+  await evaluate(`(()=>{const s=document.querySelector('#pageSize');
+     s.value='500'; s.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+  await sleep(400);
+  ok(!(await pagerUp()), "a page size that takes them all leaves nothing to page through");
+  ok(await evaluate(`document.querySelectorAll('#cards .card').length`)===379,
+     "though every record is still on screen");
+  await evaluate(`(()=>{const s=document.querySelector('#pageSize');
+     s.value='100'; s.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+  await sleep(400);
+  ok(await pagerUp(), "narrowing the page brings them back");
+  await evaluate(`(()=>{const i=document.querySelector('#globalSearch');
+     i.value='oxford'; i.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+  await sleep(500);
+  ok(await evaluate(`+document.querySelector('#resCount').textContent.replace(/,/g,'')`)<100,
+     "a search that leaves under a page of records");
+  ok(!(await pagerUp()), "takes the pager away too — one page is one page, however it got there");
+  await evaluate(`(()=>{const i=document.querySelector('#globalSearch');
+     i.value=''; i.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+  await sleep(500);
+  ok(await pagerUp(), "and clearing it restores them");
+
   console.log("\n== a metadata wrapper object is not an indentation layer ==");
   await send("Page.navigate", {url: `http://127.0.0.1:${PORT}/json-browser.html?file=text-test.json`});
   await sleep(1200);

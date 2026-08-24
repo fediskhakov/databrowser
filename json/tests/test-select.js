@@ -67,11 +67,15 @@ const ok=(c,m)=>{ if(c) pass++; else { fail++; console.log("  FAIL "+m); } };
   ok(await ev(`document.querySelector('#cards .card').classList.contains('sel')`), "the card is marked");
   const searchAfter = await ev(`document.querySelector('#globalSearch').getBoundingClientRect().width`);
   ok(searchAfter < searchBefore - 30, "and the header content shifts left to make room");
+  /* against the count, not the pager: three records fit on one page, so there is no
+     pager on screen to sit to the right of */
   ok(await ev(`(() => { const s=document.querySelector('#selbar').getBoundingClientRect(),
        h=document.querySelector('header.top').getBoundingClientRect(),
-       p=document.querySelector('.pager').getBoundingClientRect();
-       return s.right<=h.right && s.left>=p.right-1 && s.top>=h.top-1 && s.bottom<=h.bottom+1; })()`),
+       c=document.querySelector('header.top .count').getBoundingClientRect();
+       return s.right<=h.right && s.left>=c.right-1 && s.top>=h.top-1 && s.bottom<=h.bottom+1; })()`),
      "the bar is on the top line, at the right of everything else");
+  ok(await ev(`getComputedStyle(document.querySelector('.pager')).display`)==="none",
+     "and the pager is not there at all: three records are one page");
 
   console.log("\n== the two buttons ==");
   ok(await ev(`document.querySelectorAll('#selbar .copybtn').length`)===2, "there are two of them");

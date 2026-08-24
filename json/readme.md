@@ -72,9 +72,10 @@ object or array is **nested**, and appears as a collapsible expander instead.
 ## Layout
 
 - **Header** — the **☰** panel button, filename, **search** box, live record count,
-  pagination (hidden when *Records per page* is `all`), then — once something is
-  ticked — the [selection bar](#selecting-and-copying), and the [notes](#notes)
-  button at the far right.
+  pagination (shown only when there is more than one page — a filter that narrows the
+  result to a single page takes it away, as does *Records per page* = `all`), then —
+  once something is ticked — the [selection bar](#selecting-and-copying), and the
+  [notes](#notes) buttons at the far right.
 - **Left panel** — **Sort**, **Filters** (its buttons — including **⧉**, which
   [copies the filters in words](#copying-the-filters-in-words) — any saved filter
   sets, then a collapsible panel per scalar field), and **Display** options.
@@ -245,7 +246,7 @@ never disabled — "no filters — every record is shown" is a description too.
 
 | Option | Effect |
 |--------|--------|
-| **Records per page** | `100` / `500` / `1000` / `all` (hides the pager) |
+| **Records per page** | `100` / `500` / `1000` / `all`. The pager appears only while the records need more than one page |
 | **Card title field** | Card heading; defaults to the first of `name, title, display_name, label, id, uid`, else the first scalar field |
 | **Card subtitle field** | Optional smaller heading; `(none)` by default |
 | **Card image field** | Which column supplies the [thumbnail](#images) |
@@ -502,10 +503,12 @@ header and the way to deal with it is the same button. Once the file is written 
 arrow goes back to being the toggle, and stays that way until the next edit. The
 darker green is only ever a hover, in every state, so it is never mistaken for one.
 
-**A green N sits beside it** whenever the boxes are up — the same sheet as the **S**
-and **F** copies, in the notes' green — and copies the noted records as text. It is
-dulled until something is written, and copying never counts as saving: the arrow
-stays on the green button until the file itself is written.
+**A green N appears beside it** as soon as a note is written — the **S** and **F**
+copies' own button, filled and white-on-colour like them, in the notes' green — and
+copies the noted records as text, confirming itself with the same flash they use.
+It is there only while the boxes are up and only while there is something to copy,
+and copying never counts as saving: the arrow stays on the green button until the
+file itself is written.
 
 ### A file that already keeps notes
 
@@ -564,8 +567,10 @@ Ada Lovelace — Analyst
          translation
 ```
 
-**The green arrow downloads the file itself**, as JSON, named after the data
-(`econ_departments-notes.json`). It is the file you loaded and nothing else: every
+**The green arrow downloads the file itself**, as JSON, **under the file's own
+name** (`econ_departments.json`) — what comes down is what went up, ready to be put
+back where it came from; the browser adds its own `(1)` if the original is still in
+the download folder. It is the file you loaded and nothing else: every
 wrapper key, every sibling array, and every record whether or not the filters show
 it. The only difference is the notes — written into the records of the array on
 screen, and **only where a note was actually written**. A record with no note has no

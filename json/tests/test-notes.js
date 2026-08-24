@@ -53,8 +53,10 @@ const ok=(c,m)=>{ if(c) pass++; else { fail++; console.log("  FAIL "+m); } };
   ok(await ev(`(()=>{const b=document.querySelector('#noteBtn').getBoundingClientRect(),
        h=document.querySelector('header.top').getBoundingClientRect();
        return h.right-b.right < 20;})()`), "at the right-hand end of it");
-  ok(await ev(`document.querySelector('header.top').lastElementChild.id`)==="noteBtn",
-     "last, so the selection bar appearing does not move it");
+  ok(await ev(`document.querySelector('header.top').lastElementChild.className`)==="notebar",
+     "in the last group on the line, so the selection bar appearing does not move it");
+  ok(await ev(`document.querySelector('.notebar').lastElementChild.id`)==="noteBtn",
+     "and last within it, the copy sitting to its left");
   /* a true toggle: outlined green while the boxes are hidden, filled while they are up */
   ok(await ev(`getComputedStyle(document.querySelector('#noteBtn')).borderTopColor`)==="rgb(21, 128, 61)",
      "green from the start — it is the notes' button, and green is the notes' colour");
@@ -75,9 +77,8 @@ const ok=(c,m)=>{ if(c) pass++; else { fail++; console.log("  FAIL "+m); } };
      "the copy button is down while the boxes are");
   await ev(`document.querySelector('#noteBtn').click()`); await sleep(300);
   ok(await ev(`document.querySelectorAll('#cards .note').length`)===3, "every card gets one");
-  ok(await ev(`!document.querySelector('#noteCopy').hidden`), "and comes up with them");
-  ok(await ev(`document.querySelector('#noteCopy').disabled`),
-     "dulled, there being nothing written to copy yet");
+  ok(await ev(`document.querySelector('#noteCopy').hidden`),
+     "and stays down: with nothing written there is nothing to copy");
   ok(await ev(`document.querySelector('#noteBtn').getAttribute('aria-pressed')`)==="true", "the button reads as pressed");
   ok(await ev(`!document.querySelector('#cards .note').labels.length`),
      "the box has no caption of its own");
@@ -107,7 +108,6 @@ const ok=(c,m)=>{ if(c) pass++; else { fail++; console.log("  FAIL "+m); } };
   ok(oneLine<34, `one line high to start with (${Math.round(oneLine)}px)`);
   await ev(`document.querySelector('#noteBtn').click()`); await sleep(300);
   ok(await ev(`document.querySelectorAll('#cards .note').length`)===0, "clicking again hides them");
-  ok(await ev(`document.querySelector('#noteCopy').hidden`), "and takes the copy button down with them");
   await ev(`document.querySelector('#noteBtn').click()`); await sleep(300);
 
   console.log("\n== writing one ==");
@@ -128,8 +128,21 @@ const ok=(c,m)=>{ if(c) pass++; else { fail++; console.log("  FAIL "+m); } };
   await type(0,"first thought\nsecond line\nthird line"); await sleep(250);
   const grown = await ev(`document.querySelectorAll('#cards .note')[0].getBoundingClientRect().height`);
   ok(grown>oneLine+20, `it grows with the lines (${Math.round(oneLine)} → ${Math.round(grown)}px)`);
-  ok(await ev(`!document.querySelector('#noteCopy').disabled`),
-     "and the copy button wakes up, there being something to copy now");
+  ok(await ev(`!document.querySelector('#noteCopy').hidden`),
+     "and the copy button appears, there being something to copy now");
+  ok(await ev(`(()=>{const c=document.querySelector('#noteCopy').getBoundingClientRect(),
+       b=document.querySelector('#noteBtn').getBoundingClientRect();
+       return b.left-c.right;})()`)===4,
+     "the pager's own spacing from the green one, not the header's gap between groups");
+  ok(await ev(`getComputedStyle(document.querySelector('#noteCopy')).backgroundColor`)==="rgb(21, 128, 61)",
+     "filled like the S and F copies, in the notes' green");
+  ok(await ev(`getComputedStyle(document.querySelector('#noteCopy')).color`)==="rgb(255, 255, 255)",
+     "with the same white foreground");
+  /* not by the button: with a note pending it would write the file, not hide anything */
+  await ev(`setNotesOn(false)`); await sleep(250);
+  ok(await ev(`document.querySelector('#noteCopy').hidden`),
+     "hiding the boxes takes it down again, notes or no notes");
+  await ev(`setNotesOn(true)`); await sleep(250);
   await type(1,"a note on Grace"); await sleep(250);
   ok(await ev(`state.notes.size`)===2, "a second note on another card");
 
@@ -171,6 +184,14 @@ const ok=(c,m)=>{ if(c) pass++; else { fail++; console.log("  FAIL "+m); } };
      "with the note as its own field, laid out as the copies lay it out");
   ok(nt.includes("a note on Grace"), "and every note present");
   await ev(`document.querySelector('#noteCopy').click()`,true); await sleep(300);
+  ok(await ev(`document.querySelector('#noteCopy').classList.contains('ok')`),
+     "the press confirms itself");
+  ok(await ev(`getComputedStyle(document.querySelector('#noteCopy')).backgroundColor`)==="rgb(74, 222, 128)",
+     "in the notes' own green gone light — never the selection's blue");
+  await sleep(800);
+  ok(!(await ev(`document.querySelector('#noteCopy').classList.contains('ok')`)) &&
+     await ev(`getComputedStyle(document.querySelector('#noteCopy')).backgroundColor`)==="rgb(21, 128, 61)",
+     "and settles back to the green it wears");
   ok(await ev(`state.notesDirty`)===true,
      "copying leaves them unsaved — it reads them out, it does not keep them");
   ok(await icon()==="save", "so the green button still offers the file");
@@ -180,8 +201,8 @@ const ok=(c,m)=>{ if(c) pass++; else { fail++; console.log("  FAIL "+m); } };
     for(let i=0;i<40;i++){ await sleep(200); if(fs.existsSync(f)) return fs.readFileSync(f,"utf8"); }
     return null; };
   await ev(`document.querySelector('#noteBtn').click()`,true);
-  const jtext = await grab("copy-test-notes.json");
-  ok(jtext!==null, "named after the data, and JSON: copy-test-notes.json");
+  const jtext = await grab("copy-test.json");
+  ok(jtext!==null, "under the file's own name, so it can go back where it came from");
   const jd = jtext ? JSON.parse(jtext) : {people:[]};
   ok(jd.generated==="2026-08-04" && typeof jd.description==="string",
      "the file comes back whole, wrapper keys and all");
@@ -268,8 +289,7 @@ const ok=(c,m)=>{ if(c) pass++; else { fail++; console.log("  FAIL "+m); } };
      "line breaks included");
   ok(await ev(`state.notesDirty`)===false && await icon()==="note",
      "nothing unsaved yet: reading a file is not editing it");
-  ok(await ev(`!document.querySelector('#noteCopy').hidden`) &&
-     await ev(`!document.querySelector('#noteCopy').disabled`),
+  ok(await ev(`!document.querySelector('#noteCopy').hidden`),
      "both actions on offer from the start");
   ok(await ev(`NOTE_LABEL()`)==="notes", "one notes field, so one name for it");
   ok(!(await ev(`document.querySelectorAll('#cards .card')[0].innerText`)).includes("kept from the file"),
@@ -286,8 +306,8 @@ const ok=(c,m)=>{ if(c) pass++; else { fail++; console.log("  FAIL "+m); } };
   ok(await ev(`state.notesDirty`)===true, "an edit marks the file unsaved");
   ok(await ev(`notesPending()`)===true, "clearing one counts as a change too, on an adopted column");
   await ev(`document.querySelector('#noteBtn').click()`,true);
-  const ntext = await grab("notes-test-notes.json");
-  ok(ntext!==null, "the JSON is written under the file's own name");
+  const ntext = await grab("notes-test.json");
+  ok(ntext!==null, "this one too, name unchanged");
   const nd = ntext ? JSON.parse(ntext) : {records:[],other:[]};
   ok(typeof nd.description==="string" && nd.generated==="2026-08-19",
      "the wrapper keys come back untouched");

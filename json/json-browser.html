@@ -14,6 +14,7 @@
        orange is loading. Nothing else may borrow any of them. */
     --ok-soft:#d6f0dd; --ok-pale:#f3fbf6;    /* the notes' green, at ring and wash weight */
     --accent-lite:#60a5fa;                   /* the selection's blue, for a moment's confirmation */
+    --ok-lite:#4ade80;                       /* and the notes' green at that same weight */
     --load:#ea580c; --load-alt:#d97706;      /* loading: the file itself, and by URL */
   }
   *{box-sizing:border-box}
@@ -94,7 +95,7 @@
   .pager .pg{padding:0 6px;color:var(--muted)}
   /* the selection bar: last in the header, so it takes the top right and the search
      box — the only flexible item — gives up the width for it */
-  .selbar{display:flex;gap:6px;align-items:center;margin-left:auto}
+  .selbar{display:flex;gap:4px;align-items:center;margin-left:auto}
   .selbar[hidden]{display:none}       /* .selbar's display would otherwise outrank [hidden] */
   .selcount{font-size:12px;color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums}
   .selpage{display:inline-flex;gap:4px;align-items:center;font-size:12px;color:var(--muted);
@@ -117,16 +118,24 @@
   .copybtn.ok svg .sheet{fill:var(--accent-lite)}
   .copybtn.bad{background:var(--no);border-color:var(--no)}
   .copybtn.bad svg .sheet{fill:var(--no)}
-  /* Its neighbour, the other half of the pair: the same sheet as the S and F copies,
-     in the notes' green, up whenever the boxes are and dulled while there is nothing
-     to copy. Copying changes nothing, so it never carries the unsaved state. */
-  .notecopy{background:#fff;border-color:var(--ok);color:var(--ok)}
+  /* Its neighbour, the other half of the pair: the S and F copies exactly — filled,
+     white strokes, the front sheet in the button's own colour so the letter reads as
+     cut out of it — but in the notes' green, and up only once there is something to
+     copy. Copying changes nothing, so it never carries the unsaved state. Its
+     confirming flash is that same green gone light, never the selection's blue: a
+     button does not change colour on being pressed. Failure stays red, which belongs
+     to no one of the three.
+     The two sit in a group of their own, spaced like the pager's arrows and the
+     selection bar's buttons; the header's own wider gap separates group from group. */
+  .notebar{display:flex;gap:4px;align-items:center}
+  .notecopy{background:var(--ok);border-color:var(--ok);color:#fff}
   .notecopy svg .sheet{fill:var(--ok)}
-  /* the letter rides ON the sheet, so it takes the sheet's contrast, not the button's */
-  .notecopy svg text{fill:#fff}
-  .notecopy:hover:not([disabled]){background:var(--ok-pale);border-color:#166534;color:#166534}
-  .notecopy[disabled]{opacity:.5;cursor:default;border-color:var(--line);color:var(--muted)}
-  .notecopy[disabled] svg .sheet{fill:var(--muted)}
+  .notecopy.ok{background:var(--ok-lite);border-color:var(--ok-lite)}
+  .notecopy.ok svg .sheet{fill:var(--ok-lite)}
+  /* the darker green is the hover here as everywhere, and only ever the hover: while
+     the flash is on, it is the flash that shows */
+  .notecopy:not(.ok):not(.bad):hover{background:#166534;border-color:#166534}
+  .notecopy:not(.ok):not(.bad):hover svg .sheet{fill:#166534}
   /* .copybtn is inline-flex, which would outrank the attribute's own display:none */
   .notecopy[hidden]{display:none}
   details.meta{margin-bottom:10px;background:var(--panel);border:1px solid var(--line);border-radius:10px}
@@ -348,7 +357,7 @@
       <!-- what double-clicking a select box does, for the keyboard and for touch,
            where there is no double-click at all -->
       <label class="selpage" title="Select every card on this page, or clear them">
-        <input type="checkbox" id="selPage"><span>page</span>
+        <span>page</span><input type="checkbox" id="selPage">
       </label>
       <span class="selcount" id="selCount" aria-live="polite"></span>
       <button class="selclear" id="selClear" title="Clear the selection">✕</button>
@@ -375,6 +384,7 @@
          save it shows the note boxes and hides them again; the moment a note is
          edited it becomes the way to download the whole file with the notes written
          into it, and goes back to being a toggle once that is done. -->
+    <span class="notebar">
     <button class="copybtn notecopy" id="noteCopy" hidden
             title="Copy the noted records as text">
       <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -393,6 +403,7 @@
         <path d="M12 3.5v11"/><path d="M7.5 10L12 14.5 16.5 10"/><path d="M4.5 19.5h15"/>
       </svg>
     </button>
+    </span>
   </header>
 
   <aside class="side" id="side">
@@ -1433,7 +1444,10 @@ function apply(){
   state.pageItems=state.filtered.slice(start,end);
   $("#pgInfo").textContent=state.filtered.length
     ?((start+1).toLocaleString()+"–"+end.toLocaleString()+" / "+state.filtered.length.toLocaleString()+"  (pg "+(state.page+1)+"/"+pages+")"):"0";
-  $(".pager").style.display = state.pageSize==="all" ? "none" : "flex";
+  /* nothing to page through: one page, or the whole result on one. The count beside
+     it already says how many there are, so the range and the four arrows would only
+     be saying "1-3 / 3 (pg 1/1)" — chrome for a job that is not on offer. */
+  $(".pager").style.display = (state.pageSize==="all"||pages<=1) ? "none" : "flex";
   renderCards();
   syncURL();
 }
@@ -1810,12 +1824,11 @@ function renderNoteBtn(){
   b.title = dirty
     ? "Download the file as JSON, with "+(n?n+(n===1?" note":" notes"):"the notes")+" written in"
     : state.notesOn ? "Hide the note boxes" : "Add a note to each record";
-  /* the copy rides with the boxes, not with the unsaved state: it is a way of
-     reading the notes out, not of keeping them */
-  c.hidden=!state.notesOn;
-  c.disabled=!n;
-  c.title = n ? "Copy "+n+(n===1?" noted record":" noted records")+" as text"
-              : "Nothing written yet";
+  /* the copy comes up with the boxes once there is something in them, and rides with
+     the notes rather than with the unsaved state: it is a way of reading them out,
+     not of keeping them */
+  c.hidden=!(state.notesOn&&n);
+  c.title="Copy "+n+(n===1?" noted record":" noted records")+" as text";
 }
 function setNotesOn(on){
   state.notesOn=on;
@@ -1864,9 +1877,14 @@ function saveBlob(text,type,name){
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
+/* Under the file's own name: what comes down is the file that went up, notes and
+   all, ready to be put back where it came from. The name is taken apart because it
+   may be a URL or a path — a query string or a directory would make a poor filename
+   — and the browser is left to add its own "(1)" if the original is still in the
+   download folder. */
 function downloadNotesJSON(){
-  const base=(state.fileName||"records").replace(/^.*[\\/]/,"").replace(/\.json$/i,"");
-  const name=base+"-notes.json";
+  const name=(state.fileName||"").replace(/[?#].*$/,"").replace(/^.*[\\/]/,"")
+             || "records.json";
   saveBlob(notesJSONText(),"application/json;charset=utf-8",name);
   state.notesDirty=false;        // written out; the button goes back to being a toggle
   renderNoteBtn();
