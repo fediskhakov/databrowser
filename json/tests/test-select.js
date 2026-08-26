@@ -239,6 +239,40 @@ const ok=(c,m)=>{ if(c) pass++; else { fail++; console.log("  FAIL "+m); } };
   await tick(0); await sleep(150);
   ok(await ev(`selectionText()`)==="", "which leaves the short copy with nothing to say");
 
+  console.log("\n== mirror takes the page's own field switches ==");
+  const fieldtog = (f,on) => ev(`(()=>{const b=document.querySelector('#metaBody [data-fieldtog="${f}"]');
+                             b.checked=${!!on}; b.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+  await fieldtog("score",false); await fieldtog("active",false); await sleep(300);
+  ok(await ev(`document.querySelector('#metaBody [data-stog="mirror"]').textContent.trim()`)==="" &&
+     await ev(`!!document.querySelector('#metaBody [data-stog="mirror"] svg.ico')`),
+     "the third button carries the copy glyph rather than a word");
+  ok(await ev(`getComputedStyle(document.querySelector('#metaBody [data-stog="mirror"] svg.ico')).stroke`)
+       === await ev(`getComputedStyle(document.querySelector('#copyFilters svg.ico')).stroke`),
+     "in the same grey the filter-description button draws it in, not the S's accent");
+  ok(!!(await ev(`document.querySelector('#metaBody [data-stog="mirror"]').getAttribute('aria-label')`)),
+     "with a name of its own for a screen reader, the glyph saying nothing aloud");
+  await ev(`document.querySelector('#metaBody [data-stog="mirror"]').click()`); await sleep(250);
+  ok(await ev(`[...state.shortOff].sort().join(",")`)==="active,score",
+     "exactly the fields switched off above are left out, and nothing else"+
+     "\n         got "+await ev(`[...state.shortOff].sort().join(",")`));
+  ok(await ev(`document.querySelector('#metaBody [data-shorttog="orcid"]').checked`),
+     "every field the cards show is ticked again, whatever it was before");
+  ok(await ev(`document.querySelector('#metaBody [data-shorttog="name"]').checked`),
+     "the heading among them: it is on the card, so it is in the copy");
+  const mirrored = await ev(`selectionText()`);
+  ok(mirrored.includes("orcid:") && !mirrored.includes("score:"),
+     "and the copy carries what the cards carry");
+  /* the point of mirroring rather than pressing "all": a field coming back on stays
+     out of the copy until it is asked for */
+  await fieldtog("score",true); await sleep(300);
+  ok(await ev(`!document.querySelector('#metaBody [data-shorttog="score"]').checked`),
+     "switching one back on does not put it back into the copy of its own accord");
+  ok(!(await ev(`selectionText()`)).includes("score:"), "which is what the row now says");
+  /* put the page back as the section below expects to find it: every field on, and
+     nothing ticked for the short copy */
+  await fieldtog("active",true); await sleep(300);
+  await ev(`document.querySelector('#metaBody [data-stog="none"]').click()`); await sleep(250);
+
   console.log("\n== the heading is a choice like any other ==");
   const stog = (f,on) => ev(`(()=>{const b=document.querySelector('#metaBody [data-shorttog="${f}"]');
                              b.checked=${!!on}; b.dispatchEvent(new Event('change',{bubbles:true}));})()`);

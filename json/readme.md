@@ -440,12 +440,20 @@ Ada Lovelace — Analyst
 
 The metadata panel carries a **short copy fields** row directly under the display
 toggles, marked with a small copy of the **S** glyph and working the same way: a
-checkbox per field, **all** / **none** to bulk toggle, and a count of what is
-currently left out. Everything starts ticked.
+checkbox per field, **all** / **none** / **⧉** to set them in one go, and a count of
+what is currently left out. Everything starts ticked.
 
 Unticking a field removes it from the **S** copy only — the page is unchanged, and
 so is the **F** copy, which always prints everything shown. A field switched off in
 the rows above is in no copy at all, so its chip here is greyed out.
+
+**⧉** — the copy glyph, as on the button that
+[copies the filters in words](#copying-the-filters-in-words) — mirrors the page's own
+field switches into this row: every field the cards show is ticked, every field
+switched off above is unticked. The short copy then carries exactly what
+the cards carry. It differs from **all** in what happens next — a field you switch
+back on later stays out of the copy until you ask for it, rather than quietly
+rejoining it.
 
 Unlike the display rows, this one offers **the title and subtitle too**: they cannot
 leave the card, but a short copy may well want neither. Untick the subtitle and the

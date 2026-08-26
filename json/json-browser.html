@@ -165,9 +165,11 @@
   /* The filter description is neither a selection nor a note, so it takes neither
      colour — an ordinary button. Its confirmation stays quiet too: the glyph darkens
      against a grey the panel already uses, rather than the button turning a colour
-     it has no business wearing. A failure is the one thing worth shouting. */
-  #copyFilters .ico{stroke:var(--muted)}
-  #copyFilters:hover .ico{stroke:var(--ink)}
+     it has no business wearing. A failure is the one thing worth shouting.
+     The short-copy row's mirror wears the same grey: both are plain buttons carrying
+     the copy glyph, and the accent belongs to the S the row is labelled with. */
+  #copyFilters .ico,.togacts .icobtn .ico{stroke:var(--muted)}
+  #copyFilters:hover .ico,.togacts .icobtn:hover .ico{stroke:var(--ink)}
   .mini.ok{background:var(--chip);border-color:#c7ccd3}
   .mini.bad{background:var(--no);border-color:var(--no)}
   /* by id, or the resting #copyFilters rule above outranks these and nothing changes */
@@ -918,6 +920,11 @@ const SHORT_ICO='<svg class="ico" viewBox="0 0 24 24" aria-hidden="true">'+
   '<rect x="8.5" y="2.5" width="12.5" height="15.5" rx="2.5"/>'+
   '<rect class="sheet" x="3" y="6" width="12.5" height="15.5" rx="2.5"/>'+
   '<text x="9.25" y="16.8" text-anchor="middle">S</text></svg>';
+/* the same sheets without the letter — the copy glyph plain, as the filter
+   description's button wears it */
+const COPY_ICO='<svg class="ico" viewBox="0 0 24 24" aria-hidden="true">'+
+  '<rect x="8.5" y="2.5" width="12.5" height="15.5" rx="2.5"/>'+
+  '<rect class="sheet" x="3" y="6" width="12.5" height="15.5" rx="2.5"/></svg>';
 const shortNote = () => state.shortOff.size ? "   — "+state.shortOff.size+" left out" : "";
 /* Which fields the SHORT copy prints. The same shape as the display toggles above,
    but unticking one here changes nothing on screen and nothing in the full copy:
@@ -940,7 +947,11 @@ function shortRow(){
   return '<div class="kv shortrow"><span class="k">'+SHORT_ICO+'short copy fields'+
     '<span id="shortNote" class="muted">'+shortNote()+'</span></span><span class="v">'+
     '<span class="togacts"><button class="mini" data-stog="all">all</button>'+
-    '<button class="mini" data-stog="none">none</button></span>'+chips+'</span></div>';
+    '<button class="mini" data-stog="none">none</button>'+
+    '<button class="mini icobtn" data-stog="mirror" aria-label="mirror the page\'s fields"'+
+    ' title="Mirror the page: tick exactly the fields the cards show, so the short '+
+    'copy carries what they carry">'+COPY_ICO+'</button></span>'+
+    chips+'</span></div>';
 }
 
 /* ---------- filters ---------- */
@@ -2248,11 +2259,18 @@ $("#metaBody").addEventListener("change",e=>{
 $("#metaBody").addEventListener("click",e=>{
   const s=e.target.closest("button[data-stog]");
   if(s){                                       // "none" takes the heading out as well
+    const how=s.dataset.stog;
+    /* the row's own list, the notes among them only when there are any, as the row
+       offers them */
+    const fields=state.scalarFields.concat(state.complexFields)
+                     .concat(state.notes.size?[NOTE_LABEL()]:[]);
     state.shortOff.clear();
-    if(s.dataset.stog==="none")                // the notes only when there are any, as the row offers them
-      for(const k of state.scalarFields.concat(state.complexFields)
-                       .concat(state.notes.size?[NOTE_LABEL()]:[]))
-        state.shortOff.add(k);
+    if(how==="none") for(const k of fields) state.shortOff.add(k);
+    /* Mirror: take the page's own field switches. What the cards show, the copy
+       carries — and what is switched off up there is unticked here, so switching it
+       back on later does not quietly put it into the copy as well. The heading
+       fields and the notes are not switched off up there, so they stay in. */
+    else if(how==="mirror") for(const k of fields) if(state.hidden.has(k)) state.shortOff.add(k);
     renderMeta(); syncURL(); return;
   }
   const b=e.target.closest("button[data-tog]"); if(!b) return;
