@@ -77,16 +77,45 @@ cleanup() { [[ -n "$SRV_PID" ]] && kill "$SRV_PID" 2>/dev/null; rm -rf "$SERVE_D
 trap 'cleanup; exit 130' INT TERM
 trap cleanup EXIT
 
-# start the server (Python 3.7+: --directory)
-"$PY" -m http.server "$PORT" --bind 127.0.0.1 --directory "$SERVE_DIR" >/dev/null 2>&1 &
-SRV_PID=$!
-sleep 1
+# Start the server (Python 3.7+: --directory). If the port is already taken
+# (another server running), say so and offer the next port up, repeating until
+# a free one is found or the user answers N.
+while :; do
+  "$PY" -m http.server "$PORT" --bind 127.0.0.1 --directory "$SERVE_DIR" >/dev/null 2>&1 &
+  SRV_PID=$!
+  sleep 1
+  kill -0 "$SRV_PID" 2>/dev/null && break
 
-if ! kill -0 "$SRV_PID" 2>/dev/null; then
-  printf '%s\n' "error: server failed to start on port $PORT (already in use?)." >&2
-  printf '%s\n' "       try another port:  $0 \"$1\" <port>" >&2
-  exit 1
-fi
+  SRV_PID=""
+  printf '%s\n' "error: port $PORT is not available (already in use?)." >&2
+
+  NEXT=$((PORT + 1))
+  if [[ $NEXT -gt 65535 ]]; then
+    printf '%s\n' "       no higher port to try." >&2
+    exit 1
+  fi
+
+  # ask on the controlling terminal when stdin isn't one (e.g. script piped in)
+  TTY_IN=""
+  if [[ ! -t 0 ]] && (exec 3< /dev/tty) 2>/dev/null; then
+    TTY_IN=/dev/tty
+  fi
+
+  ANSWER=""
+  if [[ -n "$TTY_IN" ]]; then
+    read -r -p "Try port $NEXT instead? [y/N] " ANSWER < "$TTY_IN" || ANSWER=""
+  else
+    read -r -p "Try port $NEXT instead? [y/N] " ANSWER || ANSWER=""
+  fi
+
+  case "$ANSWER" in
+    [yY]|[yY][eE][sS]) PORT=$NEXT ;;
+    *)
+      printf '%s\n' "       try another port:  $0 \"$1\" <port>" >&2
+      exit 1
+      ;;
+  esac
+done
 
 # Query string: file=<basename> plus any extra key=value params, URL-encoded.
 # An extra arg without '=' becomes a bare key (empty value).
